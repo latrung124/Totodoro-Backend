@@ -8,9 +8,9 @@ Description: Database connection management for the BackEnd Monolith.
 package database
 
 import (
-	"log"
-
 	"database/sql"
+	"fmt"
+	"log"
 
 	_ "github.com/lib/pq"
 )
@@ -23,95 +23,63 @@ type Connections struct {
 	TaskDB         *sql.DB
 }
 
+// NewConnections initializes all database connections.
 func NewConnections(userDSN, pomodoroDSN, statisticDSN, notificationDSN, taskDSN string) (*Connections, error) {
-	userDB, err := sql.Open("postgres", userDSN)
-	if err != nil {
-		log.Printf("Error connecting to UserDB: %v", err)
+	connections := &Connections{}
+
+	var err error
+	if connections.UserDB, err = openAndPingDB("UserDB", userDSN); err != nil {
+		return nil, err
+	}
+	if connections.PomodoroDB, err = openAndPingDB("PomodoroDB", pomodoroDSN); err != nil {
+		return nil, err
+	}
+	if connections.StatisticDB, err = openAndPingDB("StatisticDB", statisticDSN); err != nil {
+		return nil, err
+	}
+	if connections.NotificationDB, err = openAndPingDB("NotificationDB", notificationDSN); err != nil {
+		return nil, err
+	}
+	if connections.TaskDB, err = openAndPingDB("TaskDB", taskDSN); err != nil {
 		return nil, err
 	}
 
-	if err := userDB.Ping(); err != nil {
-		log.Printf("Error pinging UserDB: %v", err)
-		return nil, err
-	}
-
-	pomodoroDB, err := sql.Open("postgres", pomodoroDSN)
-	if err != nil {
-		log.Printf("Error connecting to PomodoroDB: %v", err)
-		return nil, err
-	}
-
-	if err := pomodoroDB.Ping(); err != nil {
-		log.Printf("Error pinging PomodoroDB: %v", err)
-		return nil, err
-	}
-
-	statisticDB, err := sql.Open("postgres", statisticDSN)
-	if err != nil {
-		log.Printf("Error connecting to StatisticsDB: %v", err)
-		return nil, err
-	}
-
-	if err := statisticDB.Ping(); err != nil {
-		log.Printf("Error pinging StatisticsDB: %v", err)
-		return nil, err
-	}
-
-	notificationDB, err := sql.Open("postgres", notificationDSN)
-	if err != nil {
-		log.Printf("Error connecting to NotificationDB: %v", err)
-		return nil, err
-	}
-
-	if err := notificationDB.Ping(); err != nil {
-		log.Printf("Error pinging NotificationDB: %v", err)
-		return nil, err
-	}
-
-	taskDB, err := sql.Open("postgres", taskDSN)
-	if err != nil {
-		log.Printf("Error connecting to TaskManagementDB: %v", err)
-		return nil, err
-	}
-
-	if err := taskDB.Ping(); err != nil {
-		log.Printf("Error pinging TaskManagementDB: %v", err)
-		return nil, err
-	}
-
-	return &Connections{
-		UserDB:         userDB,
-		PomodoroDB:     pomodoroDB,
-		StatisticDB:    statisticDB,
-		NotificationDB: notificationDB,
-		TaskDB:         taskDB,
-	}, nil
+	return connections, nil
 }
 
+// openAndPingDB is a helper function to open and ping a database connection.
+func openAndPingDB(name, dsn string) (*sql.DB, error) {
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		log.Printf("Error connecting to %s: %v", name, err)
+		return nil, fmt.Errorf("failed to connect to %s: %w", name, err)
+	}
+
+	if err := db.Ping(); err != nil {
+		log.Printf("Error pinging %s: %v", name, err)
+		return nil, fmt.Errorf("failed to ping %s: %w", name, err)
+	}
+
+	log.Printf("%s connected successfully", name)
+	return db, nil
+}
+
+// Close closes all database connections.
 func (c *Connections) Close() {
-	if c.UserDB != nil {
-		if err := c.UserDB.Close(); err != nil {
-			log.Printf("Error closing UserDB: %v", err)
-		}
-	}
-	if c.PomodoroDB != nil {
-		if err := c.PomodoroDB.Close(); err != nil {
-			log.Printf("Error closing PomodoroDB: %v", err)
-		}
-	}
-	if c.StatisticDB != nil {
-		if err := c.StatisticDB.Close(); err != nil {
-			log.Printf("Error closing StatisticsDB: %v", err)
-		}
-	}
-	if c.NotificationDB != nil {
-		if err := c.NotificationDB.Close(); err != nil {
-			log.Printf("Error closing NotificationDB: %v", err)
-		}
-	}
-	if c.TaskDB != nil {
-		if err := c.TaskDB.Close(); err != nil {
-			log.Printf("Error closing TaskDB: %v", err)
+	closeDB("UserDB", c.UserDB)
+	closeDB("PomodoroDB", c.PomodoroDB)
+	closeDB("StatisticDB", c.StatisticDB)
+	closeDB("NotificationDB", c.NotificationDB)
+	closeDB("TaskDB", c.TaskDB)
+}
+
+// closeDB is a helper function to close a database connection.
+func closeDB(name string, db *sql.DB) {
+	if db != nil {
+		if err := db.Close(); err != nil {
+			log.Printf("Error closing %s: %v", name, err)
+		} else {
+			log.Printf("%s closed successfully", name)
 		}
 	}
 }
