@@ -8,30 +8,19 @@ Description: Main entry point for the BackEnd Monolith.
 package main
 
 import (
-	"log"
-	"os"
+	"github.com/latrung124/Totodoro-Backend/internal/config"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
-		log.Fatalf("Error loading .env file: %v", err)
+	config.Load()
+	cfg, err := config.GetConfig()
+	if err != nil {
+		panic("Failed to load configuration: " + err.Error())
 	}
 
-	// Set Gin mode based on environment variable
-	ginMode := os.Getenv("GIN_MODE")
-	if ginMode != "" {
-		gin.SetMode(ginMode)
-	}
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080" // Default port if not set
-	}
-
+	port := cfg.Port
 	router := gin.Default()
 
 	router.Run(":" + port)
