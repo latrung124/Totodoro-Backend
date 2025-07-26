@@ -38,6 +38,12 @@ project-root/
 ├── scripts/                 # Build and utility scripts
 │   ├── setup-windows.bat    # Windows setup script (as provided earlier)
 │   └── build-windows.bat    # Windows build script (as provided earlier)
+├── proto/
+│   └── user_service.proto   # gRPC service definition for user service
+├── third_party/             # Third-party dependencies
+│   └── protobuf/
+│       ├── bin/
+│       └── include/
 ├── go.mod                   # Go module file
 ├── go.sum                   # Go module checksums
 ├── README.md                # Project documentation

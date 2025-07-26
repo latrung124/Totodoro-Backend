@@ -5,3 +5,6 @@ bin/
 # Secrets/config
 .env
 .env.*
+
+# Dependency directories
+third_party/

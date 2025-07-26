@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package user_service;
+
+import "google/protobuf/timestamp.proto";
+
+// Represents a user in the system.
+message User {
+  string user_id = 1;              // Unique user ID (UUID)
+  string email = 2;                // Email for authentication (nullable)
+  string username = 3;             // Display name (required)
+  google.protobuf.Timestamp created_at = 4; // Account creation date, default NOW()
+  google.protobuf.Timestamp updated_at = 5; // Last profile update, default NOW()
+}
+
+// Request message for fetching a user profile.
+message GetUserRequest {
+  string user_id = 1;
+}
+
+// Response message containing a user profile.
+message GetUserResponse {
+  User user = 1;
+}
+
+// Request message for creating a new user.
+message CreateUserRequest {
+  string email = 1;    // Email can be used for OAuth/Firebase authentication.
+  string username = 2; // Must be unique and not null.
+}
+
+// Response message after creating a user.
+message CreateUserResponse {
+  User user = 1;
+}
+
+// Request message for updating an existing user.
+message UpdateUserRequest {
+  string user_id = 1;
+  string email = 2;    // Optional: provide a new email.
+  string username = 3; // Optional: update the display name.
+}
+
+// Response message after updating a user.
+message UpdateUserResponse {
+  User user = 1;
+}
+
+// UserService defines the operations available for user management.
+service UserService {
+  // Retrieve a user by user_id.
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+
+  // Create a new user.
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+
+  // Update an existing user's profile.
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+}
