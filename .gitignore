@@ -1,0 +1,7 @@
+# Build outputs
+bin/
+*.exe
+
+# Secrets/config
+.env
+.env.*
