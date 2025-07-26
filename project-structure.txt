@@ -1,0 +1,44 @@
+project-root/
+├── main.go                  # Entry point for the monolithic API
+├── internal/
+│   ├── user/                # User service logic
+│   │   ├── handler.go       # HTTP handlers (API endpoints)
+│   │   ├── service.go       # Business logic
+│   │   ├── repository.go    # Data access layer
+│   │   └── model.go         # Domain models (e.g., User struct)
+│   ├── pomodoro/            # Pomodoro service logic
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   ├── repository.go
+│   │   └── model.go
+│   ├── statistic/           # Statistic service logic
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   ├── repository.go
+│   │   └── model.go
+│   ├── notification/        # Notification service logic
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   ├── repository.go
+│   │   └── model.go
+│   ├── task/                # Task management service logic
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   ├── repository.go
+│   │   └── model.go
+│   ├── config/              # Configuration management
+│   │   └── config.go
+│   ├── database/            # Shared database connection
+│   │   └── db.go
+│   └── middleware/          # Shared middleware (e.g., auth, logging)
+│       └── middleware.go
+├── pkg/                     # Shared utilities (optional)
+│   └── logger/
+│       └── logger.go
+├── scripts/                 # Build and utility scripts
+│   ├── setup-windows.bat    # Windows setup script (as provided earlier)
+│   └── build-windows.bat    # Windows build script (as provided earlier)
+├── go.mod                   # Go module file
+├── go.sum                   # Go module checksums
+├── README.md                # Project documentation
+└── .env                     # Environment variables
