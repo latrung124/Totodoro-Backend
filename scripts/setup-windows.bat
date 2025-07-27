@@ -60,41 +60,54 @@ if not exist "%PROTOC_DIR%\bin\protoc.exe" (
 )
 
 REM Step 6: Generate Go files from all .proto files in the proto folder using the extracted protoc
-echo Generating protobuf files...
+set "PROTOC_DIR=third_party/protobuf"
 set "PROTOC=%PROTOC_DIR%\bin\protoc.exe"
+set "PROTO_PATH=%CD%\proto"
 
-REM Set and enable delayed expansion for PROTO_PATH
-set "PROTO_PATH=proto"
+echo Checking proto path: "%PROTO_PATH%"
 
-REM Change to the project root directory to ensure relative paths work
-cd /d "%~dp0"
+if not exist "%PROTOC%" (
+    echo Error: protoc.exe not found in %PROTOC_DIR%
+    exit /b 1
+)
 
-REM Iterate over all .proto files in the proto folder and its subdirectories
-for /r !PROTO_PATH! %%F in (*.proto) do (
+echo Current working directory: "%CD%"
+
+echo Generating protobuf files...
+
+for /r "%PROTO_PATH%" %%F in (*.proto) do (
     echo Processing %%F...
-    set "REL_PATH=%%F"
-    set "REL_PATH=!REL_PATH:%CD%\=!"
-    echo Relative path for protoc: !REL_PATH!
-    "!PROTOC!" --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative --proto_path=!PROTO_PATH! --proto_path=%PROTOC_DIR%\include "!REL_PATH!"
+    "%PROTOC%" --go_out=. --go_opt=paths=source_relative --go_opt=Mproto/%%~nF.proto=github.com/latrung124/Totodoro-Backend/internal/%%~nF --go-grpc_out=. --go-grpc_opt=paths=source_relative --proto_path="%PROTO_PATH%" --proto_path="%PROTOC_DIR%\include" "%%F"
     if !ERRORLEVEL! neq 0 (
-        echo Error: Failed to generate protobuf files for !REL_PATH!
+        echo Error: Failed to generate protobuf files for %%F
         exit /b 1
     )
 )
 
+echo ✅ Protobuf files generated successfully.
+
 REM Move generated files to their respective package directories (e.g., internal/<package>)
+set "PROTO_PACKAGE_DIR=%CD%\internal\proto_package"
+if not exist %PROTO_PACKAGE_DIR% (
+    mkdir %PROTO_PACKAGE_DIR%
+    echo Created "%PROTO_PACKAGE_DIR%" directory
+)
+ 
 for /r . %%G in (*.pb.go *.grpc.pb.go) do (
     if exist %%G (
         for /f "delims=" %%H in ("%%~dpG") do set "SOURCE_DIR=%%~nxH"
         if "!SOURCE_DIR!"=="proto" (
-            move "%%G" internal\
+            echo Source directory is proto
         ) else (
-            move "%%G" internal\"!SOURCE_DIR!"
+            echo Moving generated file %%G to %PROTO_PACKAGE_DIR%
+            move "%%G" %PROTO_PACKAGE_DIR%
         )
         if !ERRORLEVEL! neq 0 (
             echo Error: Failed to move generated file %%G
             exit /b 1
         )
+    ) else (
+        echo Warning: Generated file %%G not found
     )
 )
 
