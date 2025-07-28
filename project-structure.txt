@@ -30,9 +30,11 @@ project-root/
 │   │   └── config.go
 │   ├── database/            # Shared database connection
 │   │   └── db.go
-│   └── middleware/          # Shared middleware (e.g., auth, logging)
-│       └── middleware.go
-├── pkg/                     # Shared utilities (optional)
+│   ├── middleware/          # Shared middleware (e.g., auth, logging)
+│   |    └── middleware.go
+|   └── proto_package/       # Protobuf generated files
+│       └── pb.go            
+├── pkg/                     
 │   └── logger/
 │       └── logger.go
 ├── scripts/                 # Build and utility scripts

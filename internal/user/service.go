@@ -13,9 +13,10 @@ import (
 	"time"
 
 	"github.com/latrung124/Totodoro-Backend/internal/database"
-	pb "github.com/latrung124/Totodoro-Backend/internal/user_service"
+	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Service represents the user service implementation.
@@ -60,8 +61,8 @@ func (s *Service) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*p
 		UserId:    userId,
 		Email:     req.Email,
 		Username:  req.Username,
-		CreatedAt: &now,
-		UpdatedAt: &now,
+		CreatedAt: timestamppb.New(now),
+		UpdatedAt: timestamppb.New(now),
 	}
 
 	// Simulate database insert (replace with actual SQL)
@@ -95,7 +96,7 @@ func (s *Service) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*p
 	if req.Username != "" {
 		existingUser.Username = req.Username
 	}
-	existingUser.UpdatedAt = time.Now()
+	existingUser.UpdatedAt = timestamppb.New(time.Now())
 
 	// Simulate database update (replace with actual SQL)
 	_, err = s.db.UserDB.ExecContext(ctx, "UPDATE users SET email = $1, username = $2, updated_at = $3 WHERE user_id = $4",

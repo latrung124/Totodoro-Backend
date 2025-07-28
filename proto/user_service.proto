@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package user_service;
 
-option go_package = "github.com/latrung124/Totodoro-Backend/internal/user_service";
+option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service";
 
 import "google/protobuf/timestamp.proto";
 

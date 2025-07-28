@@ -9,11 +9,13 @@ package main
 
 import (
 	"log"
+	"net"
 
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
-
-	"github.com/gin-gonic/gin"
+	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
+	"github.com/latrung124/Totodoro-Backend/internal/user"
+	"google.golang.org/grpc"
 )
 
 func main() {
@@ -38,8 +40,17 @@ func main() {
 	}
 	defer connections.Close()
 
-	port := cfg.Port
-	router := gin.Default()
+	listen, err := net.Listen("tcp", cfg.Port)
+	if err != nil {
+		log.Fatalf("Failed to listen on port %s: %v", cfg.Port, err)
+	}
 
-	router.Run(":" + port)
+	grpcServer := grpc.NewServer()
+	userService := user.NewService(connections)
+	pb.RegisterUserServiceServer(grpcServer, userService)
+
+	log.Printf("Starting gRPC server on %s", cfg.Port)
+	if err := grpcServer.Serve(listen); err != nil {
+		log.Fatalf("Failed to serve gRPC server: %v", err)
+	}
 }
