@@ -93,6 +93,7 @@ for /r "%PROTO_PATH%" %%F in (*.proto) do (
         echo Successfully generated protobuf files for %%F
     )
 
+    REM Set the target directory for the generated files
     set "PROTO_PACKAGE_DIR=%CD%\internal\proto_package\%%~nF"
     if not exist "!PROTO_PACKAGE_DIR!" (
         mkdir "!PROTO_PACKAGE_DIR!"
@@ -101,23 +102,30 @@ for /r "%PROTO_PATH%" %%F in (*.proto) do (
         echo "!PROTO_PACKAGE_DIR!" already exists, skipping creation.
     )
 
-    REM Move generated files to their respective package directories (e.g., internal/proto_package/user_service)
-    for /r . %%G in (*.pb.go *.grpc.pb.go) do (
-        if exist "%%G" (
-            for /f "delims=" %%H in ("%%~dpG") do set "SOURCE_DIR=%%~nxH"
-            if "!SOURCE_DIR!"=="proto" (
-                echo Source directory is proto
-            ) else (
-                echo Moving generated file %%G to "!PROTO_PACKAGE_DIR!"
-                move "%%G" "!PROTO_PACKAGE_DIR!"
-            )
-            if !ERRORLEVEL! neq 0 (
-                echo Error: Failed to move generated file %%G
-                exit /b 1
-            )
-        ) else (
-            echo Warning: Generated file %%G not found
+    REM Move only the files generated for the current .proto file
+    set "PB_FILE=%%~nF.pb.go"
+    set "GRPC_FILE=%%~nF_grpc.pb.go"
+
+    if exist "!PB_FILE!" (
+        echo Moving generated file "!PB_FILE!" to "!PROTO_PACKAGE_DIR!"
+        move "!PB_FILE!" "!PROTO_PACKAGE_DIR!"
+        if !ERRORLEVEL! neq 0 (
+            echo Error: Failed to move generated file "!PB_FILE!"
+            exit /b 1
         )
+    ) else (
+        echo Warning: Generated file "!PB_FILE!" not found
+    )
+
+    if exist "!GRPC_FILE!" (
+        echo Moving generated file "!GRPC_FILE!" to "!PROTO_PACKAGE_DIR!"
+        move "!GRPC_FILE!" "!PROTO_PACKAGE_DIR!"
+        if !ERRORLEVEL! neq 0 (
+            echo Error: Failed to move generated file "!GRPC_FILE!"
+            exit /b 1
+        )
+    ) else (
+        echo Warning: Generated file "!GRPC_FILE!" not found
     )
 )
 
