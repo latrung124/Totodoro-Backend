@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package statistic_service;
+
+option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/statistic_service";
+
+import "google/protobuf/timestamp.proto";
+
+// Represents a user's productivity statistics.
+message Statistic {
+  string stats_id = 1;               // UUID: Unique statistics entry
+  string user_id = 2;               // UUID: FK → UserProfile.users(user_id)
+  int32 total_sessions = 3;        // Total Pomodoro sessions completed
+  int32 total_time = 4;            // Total focus time (in minutes)
+  int32 tasks_completed = 5;       // Number of completed tasks
+  google.protobuf.Timestamp last_active = 6; // Last Pomodoro session date
+}
+
+// === Requests and Responses ===
+
+// Fetch a user's statistics
+message GetStatisticRequest {
+  string user_id = 1;
+}
+
+message GetStatisticResponse {
+  Statistic statistic = 1;
+}
+
+// Create initial statistics for a user
+message CreateStatisticRequest {
+  string user_id = 1;
+}
+
+message CreateStatisticResponse {
+  Statistic statistic = 1;
+}
+
+// Update user statistics
+message UpdateStatisticRequest {
+  string user_id = 1;
+  int32 total_sessions = 2;
+  int32 total_time = 3;
+  int32 tasks_completed = 4;
+  google.protobuf.Timestamp last_active = 5;
+}
+
+message UpdateStatisticResponse {
+  Statistic statistic = 1;
+}
+
+// === Service Definition ===
+
+service StatisticService {
+  rpc GetStatistic(GetStatisticRequest) returns (GetStatisticResponse);
+  rpc CreateStatistic(CreateStatisticRequest) returns (CreateStatisticResponse);
+  rpc UpdateStatistic(UpdateStatisticRequest) returns (UpdateStatisticResponse);
+}
