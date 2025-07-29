@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package task_management;
+
+option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management";
+
+import "google/protobuf/timestamp.proto";
+
+// Represents a group of related tasks.
+message TaskGroup {
+  string group_id = 1;                     // UUID
+  string user_id = 2;                      // Foreign key to User (from UserProfile service)
+  string name = 3;                         // Group name
+  string description = 4;                  // Optional
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+// Represents an individual task.
+message Task {
+  string task_id = 1;                      // UUID
+  string user_id = 2;                      // Foreign key to User (from UserProfile service)
+  string group_id = 3;                     // Foreign key to TaskGroup (nullable)
+  string title = 4;
+  string description = 5;
+  bool is_completed = 6;
+  google.protobuf.Timestamp deadline = 7;  // Optional
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+}
+
+// ==== REQUESTS AND RESPONSES ====
+
+// TaskGroup CRUD
+message CreateTaskGroupRequest {
+  string user_id = 1;
+  string name = 2;
+  string description = 3;
+}
+
+message CreateTaskGroupResponse {
+  TaskGroup group = 1;
+}
+
+message GetTaskGroupsRequest {
+  string user_id = 1;
+}
+
+message GetTaskGroupsResponse {
+  repeated TaskGroup groups = 1;
+}
+
+// Task CRUD
+message CreateTaskRequest {
+  string user_id = 1;
+  string group_id = 2;
+  string title = 3;
+  string description = 4;
+  google.protobuf.Timestamp deadline = 5;
+}
+
+message CreateTaskResponse {
+  Task task = 1;
+}
+
+message GetTasksRequest {
+  string user_id = 1;
+  string group_id = 2; // Optional: filter by group
+}
+
+message GetTasksResponse {
+  repeated Task tasks = 1;
+}
+
+message UpdateTaskRequest {
+  string task_id = 1;
+  string title = 2;
+  string description = 3;
+  google.protobuf.Timestamp deadline = 4;
+  bool is_completed = 5;
+}
+
+message UpdateTaskResponse {
+  Task task = 1;
+}
+
+message DeleteTaskRequest {
+  string task_id = 1;
+}
+
+message DeleteTaskResponse {
+  bool success = 1;
+}
+
+// ==== SERVICE DEFINITION ====
+
+service TaskManagementService {
+  // Task group operations
+  rpc CreateTaskGroup(CreateTaskGroupRequest) returns (CreateTaskGroupResponse);
+  rpc GetTaskGroups(GetTaskGroupsRequest) returns (GetTaskGroupsResponse);
+
+  // Task operations
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
+  rpc GetTasks(GetTasksRequest) returns (GetTasksResponse);
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+}
