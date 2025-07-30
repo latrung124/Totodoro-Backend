@@ -10,8 +10,9 @@ import "google/protobuf/timestamp.proto";
 enum SessionStatus {
   SESSION_STATUS_UNSPECIFIED = 0;
   COMPLETED = 1;
-  SKIPPED = 2;
-  FAILED = 3;
+  PAUSED = 2;
+  RUNNING = 3;
+  ERROR = 4;
 }
 
 // ===== ENTITY DEFINITIONS =====
