@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service";
+
+package pomodoro_service;
+
+import "google/protobuf/timestamp.proto";
+
+// ===== ENUM DEFINITIONS =====
+enum SessionStatus {
+  SESSION_STATUS_UNSPECIFIED = 0;
+  COMPLETED = 1;
+  SKIPPED = 2;
+  FAILED = 3;
+}
+
+// ===== ENTITY DEFINITIONS =====
+message PomodoroSession {
+  string session_id = 1;                    // UUID - Primary key
+  string user_id = 2;                       // Foreign key to UserProfile.users
+  string task_id = 3;                       // Foreign key to TaskManagement.tasks (nullable)
+  google.protobuf.Timestamp start_time = 4; // Required
+  google.protobuf.Timestamp end_time = 5;   // Nullable
+  SessionStatus status = 6;                 // Enum: COMPLETED, SKIPPED, FAILED
+}
+
+// ===== REQUESTS AND RESPONSES =====
+message CreateSessionRequest {
+  string user_id = 1;
+  string task_id = 2;
+  google.protobuf.Timestamp start_time = 3;
+  google.protobuf.Timestamp end_time = 4;
+  SessionStatus status = 5;
+}
+
+message CreateSessionResponse {
+  PomodoroSession session = 1;
+}
+
+message GetSessionsRequest {
+  string user_id = 1;
+  string task_id = 2; // Optional filter
+}
+
+message GetSessionsResponse {
+  repeated PomodoroSession sessions = 1;
+}
+
+message UpdateSessionRequest {
+  string session_id = 1;
+  google.protobuf.Timestamp end_time = 2;
+  SessionStatus status = 3;
+}
+
+message UpdateSessionResponse {
+  PomodoroSession session = 1;
+}
+
+message DeleteSessionRequest {
+  string session_id = 1;
+}
+
+message DeleteSessionResponse {
+  bool success = 1;
+}
+
+// ===== SERVICE DEFINITION =====
+service PomodoroService {
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  rpc GetSessions(GetSessionsRequest) returns (GetSessionsResponse);
+  rpc UpdateSession(UpdateSessionRequest) returns (UpdateSessionResponse);
+  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+}
