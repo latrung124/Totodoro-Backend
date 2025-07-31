@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package notification_service;
+
+option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/notification_service";
+
+import "google/protobuf/timestamp.proto";
+
+// Represents a notification to be sent to a user.
+message Notification {
+  string notification_id = 1;                  // UUID
+  string user_id = 2;                          // Foreign key to User (from UserProfile service)
+  string message = 3;                          // Notification content
+  NotificationType type = 4;                   // "task_reminder" or "session_reminder"
+  google.protobuf.Timestamp scheduled_time = 5;// Time to trigger notification
+  NotificationStatus status = 6;               // "pending", "sent", "failed"
+}
+
+// Enum for notification type
+enum NotificationType {
+  TASK_REMINDER = 0;
+  SESSION_REMINDER = 1;
+}
+
+// Enum for notification delivery status
+enum NotificationStatus {
+  PENDING = 0;
+  SENT = 1;
+  FAILED = 2;
+}
+
+// ==== REQUESTS AND RESPONSES ====
+
+// Create a new notification
+message CreateNotificationRequest {
+  string user_id = 1;
+  string message = 2;
+  NotificationType type = 3;
+  google.protobuf.Timestamp scheduled_time = 4;
+}
+
+message CreateNotificationResponse {
+  Notification notification = 1;
+}
+
+// Fetch notifications for a user
+message GetNotificationsRequest {
+  string user_id = 1;
+}
+
+message GetNotificationsResponse {
+  repeated Notification notifications = 1;
+}
+
+// Update notification status (e.g., mark as sent or failed)
+message UpdateNotificationStatusRequest {
+  string notification_id = 1;
+  NotificationStatus status = 2;
+}
+
+message UpdateNotificationStatusResponse {
+  Notification notification = 1;
+}
+
+// ==== SERVICE DEFINITION ====
+
+service NotificationService {
+  rpc CreateNotification(CreateNotificationRequest) returns (CreateNotificationResponse);
+  rpc GetNotifications(GetNotificationsRequest) returns (GetNotificationsResponse);
+  rpc UpdateNotificationStatus(UpdateNotificationStatusRequest) returns (UpdateNotificationStatusResponse);
+}
