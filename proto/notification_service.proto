@@ -24,9 +24,10 @@ enum NotificationType {
 
 // Enum for notification delivery status
 enum NotificationStatus {
-  PENDING = 0;
-  SENT = 1;
-  FAILED = 2;
+  UNSPECIFIED = 0; // Default value, should not be used
+  PENDING = 1;
+  SENT = 2;
+  FAILED = 3;
 }
 
 // ==== REQUESTS AND RESPONSES ====

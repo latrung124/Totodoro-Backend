@@ -55,3 +55,54 @@ func (s *Service) CreateNotification(ctx context.Context, req *pb.CreateNotifica
 
 	return &pb.CreateNotificationResponse{Notification: newNotification}, nil
 }
+
+func (s *Service) GetNotifications(ctx context.Context, req *pb.GetNotificationsRequest) (*pb.GetNotificationsResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	rows, err := s.db.NotificationDB.QueryContext(ctx, "SELECT notification_id, user_id, message, type, scheduled_time, status FROM notifications WHERE user_id = $1", req.UserId)
+	if err != nil {
+		log.Printf("Error querying notifications: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve notifications")
+	}
+	defer rows.Close()
+
+	var notifications []*pb.Notification
+	for rows.Next() {
+		var n pb.Notification
+		if err := rows.Scan(&n.NotificationId, &n.UserId, &n.Message, &n.Type, &n.ScheduledTime, &n.Status); err != nil {
+			log.Printf("Error scanning notification: %v", err)
+			return nil, status.Error(codes.Internal, "failed to retrieve notifications")
+		}
+		notifications = append(notifications, &n)
+	}
+
+	return &pb.GetNotificationsResponse{Notifications: notifications}, nil
+}
+
+func (s *Service) UpdateNotificationStatus(ctx context.Context, req *pb.UpdateNotificationStatusRequest) (*pb.UpdateNotificationStatusResponse, error) {
+	if req.NotificationId == "" {
+		return nil, status.Error(codes.InvalidArgument, "notification_id is required")
+	}
+
+	if req.Status == pb.NotificationStatus_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "status is required")
+	}
+
+	_, err := s.db.NotificationDB.ExecContext(ctx, "UPDATE notifications SET status = $1 WHERE notification_id = $2", req.Status, req.NotificationId)
+	if err != nil {
+		log.Printf("Error updating notification status: %v", err)
+		return nil, status.Error(codes.Internal, "failed to update notification status")
+	}
+
+	// Get the updated notification
+	var updatedNotification pb.Notification
+	err = s.db.NotificationDB.QueryRowContext(ctx, "SELECT notification_id, user_id, message, type, scheduled_time, status FROM notifications WHERE notification_id = $1", req.NotificationId).Scan(&updatedNotification.NotificationId, &updatedNotification.UserId, &updatedNotification.Message, &updatedNotification.Type, &updatedNotification.ScheduledTime, &updatedNotification.Status)
+	if err != nil {
+		log.Printf("Error retrieving updated notification: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve updated notification")
+	}
+
+	return &pb.UpdateNotificationStatusResponse{Notification: &updatedNotification}, nil
+}
