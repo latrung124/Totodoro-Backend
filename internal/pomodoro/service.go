@@ -67,3 +67,57 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 
 	return &pb.CreateSessionResponse{Session: newSession}, nil
 }
+
+func (s *Service) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
+	if req.SessionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "session_id is required")
+	}
+
+	var session pb.PomodoroSession
+	err := s.db.PomodoroDB.QueryRowContext(ctx, "SELECT session_id, user_id, task_id, start_time, end_time, status FROM pomodoro_sessions WHERE session_id = $1", req.SessionId).Scan(
+		&session.SessionId,
+		&session.UserId,
+		&session.TaskId,
+		&session.StartTime,
+		&session.EndTime,
+		&session.Status,
+	)
+	if err != nil {
+		log.Printf("Failed to get session: %v", err)
+		return nil, status.Error(codes.NotFound, "session not found")
+	}
+
+	return &pb.GetSessionResponse{Session: &session}, nil
+}
+
+func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {
+	if req.SessionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "session_id is required")
+	}
+
+	if req.Status == pb.SessionStatus_SESSION_STATUS_UNSPECIFIED {
+		return nil, status.Error(codes.InvalidArgument, "status is required")
+	}
+
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "UPDATE pomodoro_sessions SET status = $1 WHERE session_id = $2", req.Status, req.SessionId)
+	if err != nil {
+		log.Printf("Failed to update session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to update session")
+	}
+
+	return &pb.UpdateSessionResponse{Success: true}, nil
+}
+
+func (s *Service) DeleteSession(ctx context.Context, req *pb.DeleteSessionRequest) (*pb.DeleteSessionResponse, error) {
+	if req.SessionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "session_id is required")
+	}
+
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "DELETE FROM pomodoro_sessions WHERE session_id = $1", req.SessionId)
+	if err != nil {
+		log.Printf("Failed to delete session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to delete session")
+	}
+
+	return &pb.DeleteSessionResponse{Success: true}, nil
+}
