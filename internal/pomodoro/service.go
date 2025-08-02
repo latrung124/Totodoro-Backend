@@ -15,9 +15,9 @@ import (
 
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
+	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Service struct {
@@ -30,7 +30,7 @@ func NewService(db *database.Connections) *Service {
 }
 
 // CreatePomodoro creates a new pomodoro session for a user.
-func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionRequest) (pb *pb.CreateSessionResponse, error) {
+func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionRequest) (*pb.CreateSessionResponse, error) {
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
@@ -39,55 +39,62 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 		return nil, status.Error(codes.InvalidArgument, "task_id is required")
 	}
 
-	if req.StartTime > req.EndTime {
+	if req.StartTime.AsTime().After(req.EndTime.AsTime()) {
 		return nil, status.Error(codes.InvalidArgument, "StartTime must be before EndTime")
 	}
 
 	//Start session
 
 	sessionId := "session_" + time.Now().Format("20060102150405")
-	now := time.Now()
 	newSession := &pb.PomodoroSession{
 		SessionId: sessionId,
 		UserId:    req.UserId,
 		TaskId:    req.TaskId,
-		StartTime: timestamppb.New(time.Unix(req.StartTime, 0)),
-		EndTime:   timestamppb.New(time.Unix(req.EndTime, 0)),
-		Status:   pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
+		StartTime: req.StartTime,
+		EndTime:   req.EndTime,
+		Status:    pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
 	}
 
 	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, end_time, status) VALUES ($1, $2, $3, $4, $5, $6)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.EndTime.AsTime(), newSession.Status)
 	if err != nil {
-	    if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" { // Unique violation
-	        return nil, status.Error(codes.AlreadyExists, "session already exists")
-	    }
-	    log.Printf("Failed to insert session: %v", err)
-	    return nil, status.Error(codes.Internal, "failed to create session")
+		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" { // Unique violation
+			return nil, status.Error(codes.AlreadyExists, "session already exists")
+		}
+		log.Printf("Failed to insert session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to create session")
 	}
 
 	return &pb.CreateSessionResponse{Session: newSession}, nil
 }
 
-func (s *Service) GetSession(ctx context.Context, req *pb.GetSessionRequest) (*pb.GetSessionResponse, error) {
-	if req.SessionId == "" {
+func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (*pb.GetSessionsResponse, error) {
+	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "session_id is required")
 	}
 
-	var session pb.PomodoroSession
-	err := s.db.PomodoroDB.QueryRowContext(ctx, "SELECT session_id, user_id, task_id, start_time, end_time, status FROM pomodoro_sessions WHERE session_id = $1", req.SessionId).Scan(
-		&session.SessionId,
-		&session.UserId,
-		&session.TaskId,
-		&session.StartTime,
-		&session.EndTime,
-		&session.Status,
-	)
+	rows, err := s.db.PomodoroDB.QueryContext(ctx, "SELECT session_id, user_id, task_id, start_time, end_time, status FROM pomodoro_sessions WHERE user_id = $1", req.UserId)
 	if err != nil {
-		log.Printf("Failed to get session: %v", err)
-		return nil, status.Error(codes.NotFound, "session not found")
+		log.Printf("Failed to query sessions: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve sessions")
+	}
+	defer rows.Close()
+
+	var sessions []*pb.PomodoroSession
+	for rows.Next() {
+		var session pb.PomodoroSession
+		if err := rows.Scan(&session.SessionId, &session.UserId, &session.TaskId, &session.StartTime, &session.EndTime, &session.Status); err != nil {
+			log.Printf("Failed to scan session: %v", err)
+			return nil, status.Error(codes.Internal, "failed to retrieve sessions")
+		}
+		sessions = append(sessions, &session)
 	}
 
-	return &pb.GetSessionResponse{Session: &session}, nil
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating over sessions: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve sessions")
+	}
+
+	return &pb.GetSessionsResponse{Sessions: sessions}, nil
 }
 
 func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {
@@ -105,7 +112,13 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 		return nil, status.Error(codes.Internal, "failed to update session")
 	}
 
-	return &pb.UpdateSessionResponse{Success: true}, nil
+	// Read the updated session
+	session := &pb.PomodoroSession{
+		SessionId: req.SessionId,
+		Status:    req.Status,
+	}
+
+	return &pb.UpdateSessionResponse{Session: session}, nil
 }
 
 func (s *Service) DeleteSession(ctx context.Context, req *pb.DeleteSessionRequest) (*pb.DeleteSessionResponse, error) {

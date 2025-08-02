@@ -13,7 +13,9 @@ import (
 
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
-	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
+	"github.com/latrung124/Totodoro-Backend/internal/pomodoro"
+	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
+	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"github.com/latrung124/Totodoro-Backend/internal/user"
 	"google.golang.org/grpc"
 )
@@ -47,10 +49,18 @@ func main() {
 
 	grpcServer := grpc.NewServer()
 	userService := user.NewService(connections)
-	pb.RegisterUserServiceServer(grpcServer, userService)
+	userpb.RegisterUserServiceServer(grpcServer, userService)
 
 	log.Printf("Starting gRPC server on %s", cfg.Port)
 	if err := grpcServer.Serve(listen); err != nil {
 		log.Fatalf("Failed to serve gRPC server: %v", err)
+	}
+
+	pomodoroService := pomodoro.NewService(connections)
+	pomodoropb.RegisterPomodoroServiceServer(grpcServer, pomodoroService)
+
+	log.Printf("Pomodoro service registered successfully")
+	if err := grpcServer.Serve(listen); err != nil {
+		log.Fatalf("Failed to serve Pomodoro service: %v", err)
 	}
 }
