@@ -15,7 +15,9 @@ import (
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	"github.com/latrung124/Totodoro-Backend/internal/pomodoro"
 	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
+	statisticpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/statistic_service"
 	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
+	"github.com/latrung124/Totodoro-Backend/internal/statistic"
 	"github.com/latrung124/Totodoro-Backend/internal/user"
 	"google.golang.org/grpc"
 )
@@ -62,5 +64,12 @@ func main() {
 	log.Printf("Pomodoro service registered successfully")
 	if err := grpcServer.Serve(listen); err != nil {
 		log.Fatalf("Failed to serve Pomodoro service: %v", err)
+	}
+
+	statisticService := statistic.NewService(connections)
+	statisticpb.RegisterStatisticServiceServer(grpcServer, statisticService)
+	log.Printf("Statistic service registered successfully")
+	if err := grpcServer.Serve(listen); err != nil {
+		log.Fatalf("Failed to serve Statistic service: %v", err)
 	}
 }
