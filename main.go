@@ -16,8 +16,10 @@ import (
 	"github.com/latrung124/Totodoro-Backend/internal/pomodoro"
 	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	statisticpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/statistic_service"
+	taskmanagementpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"github.com/latrung124/Totodoro-Backend/internal/statistic"
+	"github.com/latrung124/Totodoro-Backend/internal/task_management"
 	"github.com/latrung124/Totodoro-Backend/internal/user"
 	"google.golang.org/grpc"
 )
@@ -71,5 +73,12 @@ func main() {
 	log.Printf("Statistic service registered successfully")
 	if err := grpcServer.Serve(listen); err != nil {
 		log.Fatalf("Failed to serve Statistic service: %v", err)
+	}
+
+	taskmanagerService := task_management.NewService(connections)
+	taskmanagementpb.RegisterTaskManagementServiceServer(grpcServer, taskmanagerService)
+	log.Printf("Task Management service registered successfully")
+	if err := grpcServer.Serve(listen); err != nil {
+		log.Fatalf("Failed to serve Task Management service: %v", err)
 	}
 }
