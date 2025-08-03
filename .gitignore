@@ -8,3 +8,6 @@ bin/
 
 # Dependency directories
 third_party/
+
+# Generated files
+proto_package/
