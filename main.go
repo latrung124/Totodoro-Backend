@@ -13,7 +13,9 @@ import (
 
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
+	"github.com/latrung124/Totodoro-Backend/internal/notification"
 	"github.com/latrung124/Totodoro-Backend/internal/pomodoro"
+	notificationpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/notification_service"
 	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	statisticpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/statistic_service"
 	taskmanagementpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
@@ -80,5 +82,12 @@ func main() {
 	log.Printf("Task Management service registered successfully")
 	if err := grpcServer.Serve(listen); err != nil {
 		log.Fatalf("Failed to serve Task Management service: %v", err)
+	}
+
+	notificationService := notification.NewService(connections)
+	notificationpb.RegisterNotificationServiceServer(grpcServer, notificationService)
+	log.Printf("Notification service registered successfully")
+	if err := grpcServer.Serve(listen); err != nil {
+		log.Fatalf("Failed to serve Notification service: %v", err)
 	}
 }
