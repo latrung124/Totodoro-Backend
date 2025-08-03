@@ -34,6 +34,8 @@ project-root/
 │   |    └── middleware.go
 |   └── proto_package/       # Protobuf generated files
 │       └── pb.go            
+├── server/                  # Server setup and initialization   
+│       └── server.go            
 ├── pkg/                     
 │   └── logger/
 │       └── logger.go

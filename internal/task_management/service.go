@@ -96,7 +96,7 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	}
 
 	// update the task in the database
-	_, err := s.db.TaskDB.ExecContext(ctx, "UPDATE tasks SET state = $1, title = $2, description = $3, deadline = $4, isCompleted = $5 WHERE task_id = $4", req.state, req.Title, req.Description, req.Deadline, req.IsCompleted, req.TaskId)
+	_, err := s.db.TaskDB.ExecContext(ctx, "UPDATE tasks SET title = $1, description = $2, deadline = $3, isCompleted = $4 WHERE task_id = $5", req.Title, req.Description, req.Deadline, req.IsCompleted, req.TaskId)
 	if err != nil {
 		log.Printf("Error updating task: %v", err)
 		return nil, status.Error(codes.Internal, "failed to update task")
