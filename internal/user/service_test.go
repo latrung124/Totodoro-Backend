@@ -12,17 +12,65 @@ import (
 	"testing"
 	"time"
 
+	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 )
 
-func TestCreateUser(t *testing.T) {
-	// Mock database connections
-	db := &database.Connections{
-		UserDB: nil, // Replace with a mock or in-memory database
+func setupTestDB() (*database.Connections, error) {
+	envPath := "../../.env"
+	config.LoadTestConfig(envPath)
+	testCfg, err := config.GetTestConfig()
+	if err != nil {
+		return nil, err
 	}
 
-	service := NewService(db)
+	connections, err := database.NewConnections(
+		testCfg.UserDBURL,
+		testCfg.PomodoroDBURL,
+		testCfg.StatisticDBURL,
+		testCfg.NotificationDBURL,
+		testCfg.TaskDBURL,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return connections, nil
+}
+
+func CleanupTestDB(connections *database.Connections) {
+	// Close all database connections
+	if connections.UserDB != nil {
+		connections.UserDB.Exec("DROP TABLE IF EXISTS user_db")
+		connections.UserDB.Close()
+	}
+	if connections.PomodoroDB != nil {
+		connections.PomodoroDB.Exec("DROP TABLE IF EXISTS pomodoro_db")
+		connections.PomodoroDB.Close()
+	}
+	if connections.StatisticDB != nil {
+		connections.StatisticDB.Exec("DROP TABLE IF EXISTS statistic_db")
+		connections.StatisticDB.Close()
+	}
+	if connections.NotificationDB != nil {
+		connections.NotificationDB.Exec("DROP TABLE IF EXISTS notification_db")
+		connections.NotificationDB.Close()
+	}
+	if connections.TaskDB != nil {
+		connections.TaskDB.Exec("DROP TABLE IF EXISTS task_db")
+		connections.TaskDB.Close()
+	}
+}
+
+func TestCreateUser(t *testing.T) {
+	// Test configuration loading
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatal("Failed to set up test database connections")
+	}
+
+	service := NewService(connections)
 
 	// Create a test request
 	req := &pb.CreateUserRequest{
@@ -46,4 +94,17 @@ func TestCreateUser(t *testing.T) {
 	if resp.User.CreatedAt.AsTime().After(time.Now()) {
 		t.Errorf("Invalid CreatedAt timestamp")
 	}
+
+	var count int
+	err = connections.UserDB.QueryRow("SELECT COUNT(*) FROM users WHERE user_id = $1", resp.User.UserId).Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to query user count: %v", err)
+	}
+
+	if count != 1 {
+		t.Errorf("Expected 1 user in database, found %d", count)
+	}
+
+	// Cleanup
+	CleanupTestDB(connections)
 }

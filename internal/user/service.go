@@ -12,6 +12,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"google.golang.org/grpc/codes"
@@ -46,14 +47,14 @@ func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetU
 	return &pb.GetUserResponse{User: &user}, nil
 }
 
-// CreateUser creates a new user.
+// CreateUser creates a new user with the provided details.
 func (s *Service) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
 	if req.Email == "" || req.Username == "" {
 		return nil, status.Error(codes.InvalidArgument, "email and username are required")
 	}
 
 	// Generate a unique user_id (e.g., UUID would be better in production)
-	userId := "user_" + time.Now().Format("20060102150405")
+	userId := uuid.NewString()
 
 	// Set current timestamp
 	now := time.Now()
@@ -65,9 +66,13 @@ func (s *Service) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*p
 		UpdatedAt: timestamppb.New(now),
 	}
 
-	// Simulate database insert (replace with actual SQL)
+	// Convert timestamppb.Timestamp to time.Time
+	createdAt := newUser.CreatedAt.AsTime()
+	updatedAt := newUser.UpdatedAt.AsTime()
+
+	// Insert into the database
 	_, err := s.db.UserDB.ExecContext(ctx, "INSERT INTO users (user_id, email, username, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
-		newUser.UserId, newUser.Email, newUser.Username, newUser.CreatedAt, newUser.UpdatedAt)
+		newUser.UserId, newUser.Email, newUser.Username, createdAt, updatedAt)
 	if err != nil {
 		log.Printf("Failed to create user: %v", err)
 		return nil, status.Error(codes.Internal, "failed to create user")
