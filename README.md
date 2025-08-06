@@ -63,3 +63,37 @@ After building, you can run the project using:
 ```bash
 ./bin/totodoro-backend.exe
 ```
+
+### Running Unit Tests
+
+To ensure the project is functioning as expected, you can run the unit tests provided in the repository.
+
+1. **Set Up the Test Environment**:
+   - Ensure the `.env` file is properly configured for testing. Use environment variables like `TEST_USER_DB_URL` to point to a test database.
+
+2. **Run All Tests**:
+   - Use the following command to run all unit tests in the project:
+     ```bash
+     go test ./...
+     ```
+
+3. **Run a Specific Test**:
+   - To run a specific test, use the `-run` flag with the test name:
+     ```bash
+     go test -run TestCreateUser ./...
+     ```
+
+4. **Verbose Output**:
+   - Use the `-v` flag to see detailed output for each test:
+     ```bash
+     go test -v ./...
+     ```
+
+5. **Check Coverage**:
+   - To check test coverage, use the `-cover` flag:
+     ```bash
+     go test -cover ./...
+     ```
+
+6. **Debugging Tests**:
+   - Add `t.Log` or `log.Printf` statements in your test files to debug failing tests. Use the `-v` flag to see the logs.
