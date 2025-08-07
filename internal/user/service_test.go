@@ -104,7 +104,64 @@ func TestCreateUser(t *testing.T) {
 	if count != 1 {
 		t.Errorf("Expected 1 user in database, found %d", count)
 	}
+}
 
-	// Cleanup
-	CleanupTestDB(connections)
+func TestGetUser(t *testing.T) {
+	//Test configuration loading
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatal("Failed to set up test database connections")
+	}
+
+	service := NewService(connections)
+
+	req := &pb.GetUserRequest{
+		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f94id-12345",
+	}
+
+	resp, err := service.GetUser(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetUser failed: %v", err)
+	}
+
+	// Compare the response with expected values
+	if resp.User.UserId != req.UserId {
+		t.Errorf("Expected UserId %s, got %s", req.UserId, resp.User.UserId)
+	}
+
+	if resp.User.Email != "test@gmail.com" {
+		t.Errorf("Expected Email test@gmail.com")
+	}
+
+	if resp.User.Username != "testuser" {
+		t.Errorf("Expected Username testuser, got %s", resp.User.Username)
+	}
+
+	// Check timestamps
+	if resp.User.CreatedAt.AsTime().After(time.Now()) {
+		t.Errorf("Invalid CreatedAt timestamp")
+	}
+
+	if resp.User.UpdatedAt.AsTime().After(time.Now()) {
+		t.Errorf("Invalid UpdatedAt timestamp")
+	}
+}
+
+func TestGetUserNotFound(t *testing.T) {
+	// Test configuration loading
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatal("Failed to set up test database connections")
+	}
+
+	service := NewService(connections)
+
+	req := &pb.GetUserRequest{
+		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f4",
+	}
+
+	_, err = service.GetUser(context.Background(), req)
+	if err == nil {
+		t.Fatal("Expected error for non-existent user, got nil")
+	}
 }
