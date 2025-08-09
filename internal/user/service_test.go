@@ -9,6 +9,7 @@ package user
 
 import (
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -23,6 +24,15 @@ func setupTestDB() (*database.Connections, error) {
 	testCfg, err := config.GetTestConfig()
 	if err != nil {
 		return nil, err
+	}
+
+	// Logging the test configuration
+	if testCfg != nil {
+		log.Printf("User DBURL: %s", testCfg.UserDBURL)
+		log.Printf("Pomodoro DBURL: %s", testCfg.PomodoroDBURL)
+		log.Printf("Statistic DBURL: %s", testCfg.StatisticDBURL)
+		log.Printf("Notification DBURL: %s", testCfg.NotificationDBURL)
+		log.Printf("Task DBURL: %s", testCfg.TaskDBURL)
 	}
 
 	connections, err := database.NewConnections(
@@ -116,7 +126,7 @@ func TestGetUser(t *testing.T) {
 	service := NewService(connections)
 
 	req := &pb.GetUserRequest{
-		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f94id-12345",
+		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f94",
 	}
 
 	resp, err := service.GetUser(context.Background(), req)
@@ -164,4 +174,43 @@ func TestGetUserNotFound(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for non-existent user, got nil")
 	}
+}
+
+func TestUpdateUser(t *testing.T) {
+	// Test configuration loading
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatal("Failed to set up test database connections")
+	}
+
+	service := NewService(connections)
+
+	req := &pb.UpdateUserRequest{
+		UserId:   "50f58fc8-c980-4ba6-9fcc-1e6f69367f94",
+		Email:    "test_update@gmail.com",
+		Username: "testuser_updated",
+	}
+	resp, err := service.UpdateUser(context.Background(), req)
+	if err != nil {
+		t.Fatalf("UpdateUser failed: %v", err)
+	}
+	if resp.User.Email != req.Email {
+		t.Errorf("Expected email %s, got %s", req.Email, resp.User.Email)
+	}
+
+	if resp.User.Username != req.Username {
+		t.Errorf("Expected username %s, got %s", req.Username, resp.User.Username)
+	}
+
+	if resp.User.UpdatedAt.AsTime().After(time.Now()) {
+		t.Errorf("Invalid UpdatedAt timestamp")
+	}
+
+	var count int
+	err = connections.UserDB.QueryRow("SELECT COUNT(*) FROM users WHERE user_id = $1", req.UserId).Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to query user count: %v", err)
+	}
+
+	t.Logf("Test UserId: %s", req.UserId)
 }
