@@ -9,6 +9,9 @@ package user
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -37,14 +40,36 @@ func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetU
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	// Simulate database query (replace with actual SQL)
-	var user pb.User
-	err := s.db.UserDB.QueryRowContext(ctx, "SELECT user_id, email, username, created_at, updated_at FROM users WHERE user_id = $1", req.UserId).Scan(&user.UserId, &user.Email, &user.Username, &user.CreatedAt, &user.UpdatedAt)
+	var (
+		userID    string
+		email     string
+		username  string
+		createdAt time.Time
+		updatedAt time.Time
+	)
+
+	err := s.db.UserDB.QueryRowContext(
+		ctx,
+		"SELECT user_id, email, username, created_at, updated_at FROM users WHERE user_id = $1",
+		req.UserId,
+	).Scan(&userID, &email, &username, &createdAt, &updatedAt)
+
 	if err != nil {
-		return nil, status.Error(codes.NotFound, "user not found")
+		if err == sql.ErrNoRows {
+			return nil, status.Errorf(codes.NotFound, "user not found")
+		}
+		return nil, status.Error(codes.Internal, fmt.Sprintf("failed to retrieve user: %v", err))
 	}
 
-	return &pb.GetUserResponse{User: &user}, nil
+	user := &pb.User{
+		UserId:    userID,
+		Email:     email,
+		Username:  username,
+		CreatedAt: timestamppb.New(createdAt),
+		UpdatedAt: timestamppb.New(updatedAt),
+	}
+
+	return &pb.GetUserResponse{User: user}, nil
 }
 
 // CreateUser creates a new user with the provided details.
@@ -87,12 +112,26 @@ func (s *Service) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*p
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	// Fetch existing user
+	// Temporary variables for DB scan
+	var createdAt, updatedAt time.Time
 	var existingUser pb.User
-	err := s.db.UserDB.QueryRowContext(ctx, "SELECT user_id, email, username, created_at, updated_at FROM users WHERE user_id = $1", req.UserId).Scan(&existingUser.UserId, &existingUser.Email, &existingUser.Username, &existingUser.CreatedAt, &existingUser.UpdatedAt)
+
+	// Fetch existing user
+	err := s.db.UserDB.QueryRowContext(
+		ctx,
+		"SELECT user_id, email, username, created_at, updated_at FROM users WHERE user_id = $1",
+		req.UserId,
+	).Scan(&existingUser.UserId, &existingUser.Email, &existingUser.Username, &createdAt, &updatedAt)
 	if err != nil {
-		return nil, status.Error(codes.NotFound, "user not found")
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, status.Error(codes.NotFound, "user not found")
+		}
+		return nil, status.Errorf(codes.Internal, "failed to fetch user: %v", err)
 	}
+
+	// Convert to protobuf timestamp
+	existingUser.CreatedAt = timestamppb.New(createdAt)
+	existingUser.UpdatedAt = timestamppb.New(updatedAt)
 
 	// Update fields if provided
 	if req.Email != "" {
@@ -101,11 +140,15 @@ func (s *Service) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*p
 	if req.Username != "" {
 		existingUser.Username = req.Username
 	}
-	existingUser.UpdatedAt = timestamppb.New(time.Now())
+	newUpdatedAt := time.Now()
+	existingUser.UpdatedAt = timestamppb.New(newUpdatedAt)
 
-	// Simulate database update (replace with actual SQL)
-	_, err = s.db.UserDB.ExecContext(ctx, "UPDATE users SET email = $1, username = $2, updated_at = $3 WHERE user_id = $4",
-		existingUser.Email, existingUser.Username, existingUser.UpdatedAt, existingUser.UserId)
+	// Update DB
+	_, err = s.db.UserDB.ExecContext(
+		ctx,
+		"UPDATE users SET email = $1, username = $2, updated_at = $3 WHERE user_id = $4",
+		existingUser.Email, existingUser.Username, newUpdatedAt, existingUser.UserId,
+	)
 	if err != nil {
 		log.Printf("Failed to update user: %v", err)
 		return nil, status.Error(codes.Internal, "failed to update user")

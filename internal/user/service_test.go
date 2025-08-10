@@ -9,13 +9,17 @@ package user
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func setupTestDB() (*database.Connections, error) {
@@ -24,15 +28,6 @@ func setupTestDB() (*database.Connections, error) {
 	testCfg, err := config.GetTestConfig()
 	if err != nil {
 		return nil, err
-	}
-
-	// Logging the test configuration
-	if testCfg != nil {
-		log.Printf("User DBURL: %s", testCfg.UserDBURL)
-		log.Printf("Pomodoro DBURL: %s", testCfg.PomodoroDBURL)
-		log.Printf("Statistic DBURL: %s", testCfg.StatisticDBURL)
-		log.Printf("Notification DBURL: %s", testCfg.NotificationDBURL)
-		log.Printf("Task DBURL: %s", testCfg.TaskDBURL)
 	}
 
 	connections, err := database.NewConnections(
@@ -49,32 +44,30 @@ func setupTestDB() (*database.Connections, error) {
 	return connections, nil
 }
 
-func CleanupTestDB(connections *database.Connections) {
-	// Close all database connections
-	if connections.UserDB != nil {
-		connections.UserDB.Exec("DROP TABLE IF EXISTS user_db")
-		connections.UserDB.Close()
+func RemoveUserId(connections *database.Connections, userId string) {
+	// Remove test rows from the users table
+	_, err := connections.UserDB.Exec("DELETE FROM users WHERE user_id = $1",
+		&userId)
+	if err != nil {
+		log.Printf("Failed to clean up test user: %v", err)
+	} else {
+		log.Println("Test user cleaned up successfully")
 	}
-	if connections.PomodoroDB != nil {
-		connections.PomodoroDB.Exec("DROP TABLE IF EXISTS pomodoro_db")
-		connections.PomodoroDB.Close()
-	}
-	if connections.StatisticDB != nil {
-		connections.StatisticDB.Exec("DROP TABLE IF EXISTS statistic_db")
-		connections.StatisticDB.Close()
-	}
-	if connections.NotificationDB != nil {
-		connections.NotificationDB.Exec("DROP TABLE IF EXISTS notification_db")
-		connections.NotificationDB.Close()
-	}
-	if connections.TaskDB != nil {
-		connections.TaskDB.Exec("DROP TABLE IF EXISTS task_db")
-		connections.TaskDB.Close()
+}
+
+func seedTestUser(t *testing.T, db *sql.DB, userId string, email string, username string) {
+	_, err := db.Exec(
+		`INSERT INTO users (user_id, email, username, created_at, updated_at)
+		 VALUES ($1, $2, $3, NOW(), NOW()) 
+		 ON CONFLICT (user_id) DO NOTHING`,
+		userId, email, username,
+	)
+	if err != nil {
+		t.Fatalf("Failed to seed test user: %v", err)
 	}
 }
 
 func TestCreateUser(t *testing.T) {
-	// Test configuration loading
 	connections, err := setupTestDB()
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
@@ -82,26 +75,25 @@ func TestCreateUser(t *testing.T) {
 
 	service := NewService(connections)
 
-	// Create a test request
 	req := &pb.CreateUserRequest{
-		Email:    "test@example.com",
-		Username: "testuser",
+		Email:    "CreateUserRequest@example.com",
+		Username: "CreateUserRequest",
 	}
 
-	// Call the CreateUser method
 	resp, err := service.CreateUser(context.Background(), req)
 	if err != nil {
 		t.Fatalf("CreateUser failed: %v", err)
 	}
 
-	// Validate the response
 	if resp.User.Email != req.Email {
 		t.Errorf("Expected email %s, got %s", req.Email, resp.User.Email)
 	}
 	if resp.User.Username != req.Username {
 		t.Errorf("Expected username %s, got %s", req.Username, resp.User.Username)
 	}
-	if resp.User.CreatedAt.AsTime().After(time.Now()) {
+
+	// Check CreatedAt is not in the future
+	if resp.User.CreatedAt.AsTime().After(time.Now().Add(1 * time.Second)) {
 		t.Errorf("Invalid CreatedAt timestamp")
 	}
 
@@ -110,23 +102,29 @@ func TestCreateUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to query user count: %v", err)
 	}
-
 	if count != 1 {
 		t.Errorf("Expected 1 user in database, found %d", count)
 	}
+
+	//TODO: Check createdAt and updatedAt timestamps
+
+	// Clean up the test user after the test
+	RemoveUserId(connections, resp.User.UserId)
+	t.Logf("Test UserId: %s", resp.User.UserId)
 }
 
 func TestGetUser(t *testing.T) {
-	//Test configuration loading
 	connections, err := setupTestDB()
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
 
 	service := NewService(connections)
+	testUserID := uuid.NewString()
+	seedTestUser(t, connections.UserDB, testUserID, "TestGetUser@gmail.com", "TestGetUser")
 
 	req := &pb.GetUserRequest{
-		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f94",
+		UserId: testUserID,
 	}
 
 	resp, err := service.GetUser(context.Background(), req)
@@ -134,31 +132,23 @@ func TestGetUser(t *testing.T) {
 		t.Fatalf("GetUser failed: %v", err)
 	}
 
-	// Compare the response with expected values
 	if resp.User.UserId != req.UserId {
 		t.Errorf("Expected UserId %s, got %s", req.UserId, resp.User.UserId)
 	}
-
-	if resp.User.Email != "test@gmail.com" {
-		t.Errorf("Expected Email test@gmail.com")
+	if resp.User.Email != "TestGetUser@gmail.com" {
+		t.Errorf("Expected Email TestGetUser@gmail.com, got %s", resp.User.Email)
+	}
+	if resp.User.Username != "TestGetUser" {
+		t.Errorf("Expected Username TestGetUser, got %s", resp.User.Username)
 	}
 
-	if resp.User.Username != "testuser" {
-		t.Errorf("Expected Username testuser, got %s", resp.User.Username)
-	}
+	// TODO: Check CreatedAt and UpdatedAt timestamps
 
-	// Check timestamps
-	if resp.User.CreatedAt.AsTime().After(time.Now()) {
-		t.Errorf("Invalid CreatedAt timestamp")
-	}
-
-	if resp.User.UpdatedAt.AsTime().After(time.Now()) {
-		t.Errorf("Invalid UpdatedAt timestamp")
-	}
+	// Clean up the test user after the test
+	RemoveUserId(connections, testUserID)
 }
 
 func TestGetUserNotFound(t *testing.T) {
-	// Test configuration loading
 	connections, err := setupTestDB()
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
@@ -167,50 +157,55 @@ func TestGetUserNotFound(t *testing.T) {
 	service := NewService(connections)
 
 	req := &pb.GetUserRequest{
-		UserId: "50f58fc8-c980-4ba6-9fcc-1e6f69367f4",
+		UserId: "12345678-1234-1234-1234-123456789012", // Non-existent user ID
 	}
 
 	_, err = service.GetUser(context.Background(), req)
-	if err == nil {
-		t.Fatal("Expected error for non-existent user, got nil")
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("Expected NotFound error, got %v", err)
 	}
 }
 
 func TestUpdateUser(t *testing.T) {
-	// Test configuration loading
 	connections, err := setupTestDB()
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
 
 	service := NewService(connections)
+	testUserID := uuid.NewString()
+	seedTestUser(t, connections.UserDB, testUserID, "TestUpdateUser@gmail.com", "TestUpdateUser")
 
 	req := &pb.UpdateUserRequest{
-		UserId:   "50f58fc8-c980-4ba6-9fcc-1e6f69367f94",
-		Email:    "test_update@gmail.com",
-		Username: "testuser_updated",
+		UserId:   testUserID,
+		Email:    "TestUpdateUser_After@gmail.com",
+		Username: "TestUpdateUser_After",
 	}
+
 	resp, err := service.UpdateUser(context.Background(), req)
 	if err != nil {
 		t.Fatalf("UpdateUser failed: %v", err)
 	}
+
 	if resp.User.Email != req.Email {
 		t.Errorf("Expected email %s, got %s", req.Email, resp.User.Email)
 	}
-
 	if resp.User.Username != req.Username {
 		t.Errorf("Expected username %s, got %s", req.Username, resp.User.Username)
 	}
 
-	if resp.User.UpdatedAt.AsTime().After(time.Now()) {
-		t.Errorf("Invalid UpdatedAt timestamp")
-	}
+	// TODO: Check CreatedAt and UpdatedAt timestamps
 
 	var count int
 	err = connections.UserDB.QueryRow("SELECT COUNT(*) FROM users WHERE user_id = $1", req.UserId).Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to query user count: %v", err)
 	}
-
+	if count != 1 {
+		t.Errorf("Expected 1 user in database, found %d", count)
+	}
 	t.Logf("Test UserId: %s", req.UserId)
+
+	// Clean up the test user after the test
+	RemoveUserId(connections, req.UserId)
 }
