@@ -13,16 +13,34 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Service struct {
 	pb.UnimplementedPomodoroServiceServer
 	db *database.Connections
+}
+
+var sessionStatusEnumToStringMap = map[int32]string{
+	0: "SESSION_STATUS_UNSPECIFIED",
+	1: "COMPLETED",
+	2: "PAUSED",
+	3: "RUNNING",
+	4: "ERROR",
+}
+
+var sessionStatusStringToEnumMap = map[string]pb.SessionStatus{
+	"SESSION_STATUS_UNSPECIFIED": pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
+	"COMPLETED":                  pb.SessionStatus_COMPLETED,
+	"PAUSED":                     pb.SessionStatus_PAUSED,
+	"RUNNING":                    pb.SessionStatus_RUNNING,
+	"ERROR":                      pb.SessionStatus_ERROR,
 }
 
 func NewService(db *database.Connections) *Service {
@@ -44,8 +62,8 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 	}
 
 	//Start session
+	sessionId := uuid.NewString()
 
-	sessionId := "session_" + time.Now().Format("20060102150405")
 	newSession := &pb.PomodoroSession{
 		SessionId: sessionId,
 		UserId:    req.UserId,
@@ -55,7 +73,9 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 		Status:    pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
 	}
 
-	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, end_time, status) VALUES ($1, $2, $3, $4, $5, $6)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.EndTime.AsTime(), newSession.Status)
+	statusStr := sessionStatusEnumToStringMap[int32(newSession.Status)]
+
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, end_time, status) VALUES ($1, $2, $3, $4, $5, $6)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.EndTime.AsTime(), statusStr)
 	if err != nil {
 		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" { // Unique violation
 			return nil, status.Error(codes.AlreadyExists, "session already exists")
@@ -69,10 +89,13 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 
 func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (*pb.GetSessionsResponse, error) {
 	if req.UserId == "" {
-		return nil, status.Error(codes.InvalidArgument, "session_id is required")
+		return nil, status.Error(codes.InvalidArgument, "user_id is required") // fixed message
 	}
 
-	rows, err := s.db.PomodoroDB.QueryContext(ctx, "SELECT session_id, user_id, task_id, start_time, end_time, status FROM pomodoro_sessions WHERE user_id = $1", req.UserId)
+	rows, err := s.db.PomodoroDB.QueryContext(ctx, `
+        SELECT session_id, user_id, task_id, start_time, end_time, status
+        FROM pomodoro_sessions
+        WHERE user_id = $1`, req.UserId)
 	if err != nil {
 		log.Printf("Failed to query sessions: %v", err)
 		return nil, status.Error(codes.Internal, "failed to retrieve sessions")
@@ -81,10 +104,22 @@ func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (
 
 	var sessions []*pb.PomodoroSession
 	for rows.Next() {
-		var session pb.PomodoroSession
-		if err := rows.Scan(&session.SessionId, &session.UserId, &session.TaskId, &session.StartTime, &session.EndTime, &session.Status); err != nil {
+		var (
+			session   pb.PomodoroSession
+			start     time.Time
+			end       time.Time
+			statusStr string
+		)
+		if err := rows.Scan(&session.SessionId, &session.UserId, &session.TaskId, &start, &end, &statusStr); err != nil {
 			log.Printf("Failed to scan session: %v", err)
 			return nil, status.Error(codes.Internal, "failed to retrieve sessions")
+		}
+		session.StartTime = timestamppb.New(start)
+		session.EndTime = timestamppb.New(end)
+		if v, ok := sessionStatusStringToEnumMap[statusStr]; ok {
+			session.Status = v
+		} else {
+			session.Status = pb.SessionStatus_SESSION_STATUS_UNSPECIFIED
 		}
 		sessions = append(sessions, &session)
 	}
@@ -106,7 +141,8 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 		return nil, status.Error(codes.InvalidArgument, "status is required")
 	}
 
-	_, err := s.db.PomodoroDB.ExecContext(ctx, "UPDATE pomodoro_sessions SET status = $1 WHERE session_id = $2", req.Status, req.SessionId)
+	statusStr := sessionStatusEnumToStringMap[int32(req.Status)]
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "UPDATE pomodoro_sessions SET status = $1 WHERE session_id = $2", statusStr, req.SessionId)
 	if err != nil {
 		log.Printf("Failed to update session: %v", err)
 		return nil, status.Error(codes.Internal, "failed to update session")

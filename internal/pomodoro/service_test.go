@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
@@ -43,6 +44,7 @@ func setupTestDB() (*database.Connections, error) {
 }
 
 func SeedPomodoroSession(t *testing.T, db *sql.DB, sessionId string, userId string, taskId string, startTime time.Time, endTime time.Time) {
+	statusStr := "SESSION_STATUS_UNSPECIFIED"
 	_, err := db.Exec(
 		`INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, end_time, status)
 		 VALUES ($1, $2, $3, $4, $5, $6)`,
@@ -51,7 +53,7 @@ func SeedPomodoroSession(t *testing.T, db *sql.DB, sessionId string, userId stri
 		taskId,
 		startTime,
 		endTime,
-		pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
+		statusStr,
 	)
 	if err != nil {
 		t.Fatalf("Failed to seed test pomodoro session: %v", err)
@@ -80,8 +82,8 @@ func TestCreateSession(t *testing.T) {
 	now := time.Now()
 
 	req := &pb.CreateSessionRequest{
-		UserId:    "test_user",
-		TaskId:    "test_task",
+		UserId:    uuid.NewString(),
+		TaskId:    uuid.NewString(),
 		StartTime: timestamppb.New(now),
 		EndTime:   timestamppb.New(now.Add(25 * time.Minute)),
 		Status:    pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
@@ -125,9 +127,9 @@ func TestGetSessions(t *testing.T) {
 
 	service := NewService(connections)
 
-	userId := "test_user"
-	taskId := "test_task"
-	sessionId := "session_test_123"
+	userId := uuid.NewString()
+	taskId := uuid.NewString()
+	sessionId := uuid.NewString()
 	startTime := time.Now()
 	endTime := startTime.Add(25 * time.Minute)
 
@@ -169,9 +171,9 @@ func TestUpdateSessionResponse(t *testing.T) {
 
 	service := NewService(connections)
 
-	userId := "test_user"
-	taskId := "test_task"
-	sessionId := "session_test_update_123"
+	userId := uuid.NewString()
+	taskId := uuid.NewString()
+	sessionId := uuid.NewString()
 	startTime := time.Now()
 	endTime := startTime.Add(25 * time.Minute)
 
@@ -191,19 +193,21 @@ func TestUpdateSessionResponse(t *testing.T) {
 	if resp.Session.SessionId != sessionId {
 		t.Errorf("Expected SessionId %s, got %s", sessionId, resp.Session.SessionId)
 	}
+
 	if resp.Session.Status != pb.SessionStatus_COMPLETED {
 		t.Errorf("Expected Status %s, got %s", pb.SessionStatus_COMPLETED, resp.Session.Status)
 	}
 
 	// Check if the session was updated in the database
-	var status pb.SessionStatus
-	err = connections.PomodoroDB.QueryRow("SELECT status FROM pomodoro_sessions WHERE session_id = $1", sessionId).Scan(&status)
+	var statusStr string
+	err = connections.PomodoroDB.QueryRow("SELECT status FROM pomodoro_sessions WHERE session_id = $1", sessionId).Scan(&statusStr)
 	if err != nil {
 		t.Fatalf("Failed to query updated session status: %v", err)
 	}
 
-	if status != pb.SessionStatus_COMPLETED {
-		t.Errorf("Expected updated status %s, got %s", pb.SessionStatus_COMPLETED, status)
+	statusEnum := sessionStatusStringToEnumMap[statusStr]
+	if statusEnum != pb.SessionStatus_COMPLETED {
+		t.Errorf("Expected updated status %s, got %s", pb.SessionStatus_COMPLETED, statusEnum)
 	}
 
 	// Clean up test session
@@ -219,9 +223,9 @@ func TestDeleteSession(t *testing.T) {
 
 	service := NewService(connections)
 
-	userId := "test_user"
-	taskId := "test_task"
-	sessionId := "session_test_delete_123"
+	userId := uuid.NewString()
+	taskId := uuid.NewString()
+	sessionId := uuid.NewString()
 	startTime := time.Now()
 	endTime := startTime.Add(25 * time.Minute)
 
