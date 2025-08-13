@@ -1,5 +1,5 @@
 /*
-File: service_test.go
+File: internal/user/service_test.go
 Author: trung.la
 Date: 08-04-2025
 Description: Test cases for user service functions.

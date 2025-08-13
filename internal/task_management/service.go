@@ -13,6 +13,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	"google.golang.org/grpc/codes"
@@ -44,7 +45,7 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 	}
 
 	// Simulate database insert (replace with actual SQL)
-	taskId := "task_" + time.Now().Format("20060102150405")
+	taskId := uuid.NewString()
 	now := time.Now()
 	newTask := &pb.Task{
 		TaskId:      taskId,
@@ -134,10 +135,9 @@ func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRe
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
 
-	groupId := "group_" + time.Now().Format("20060102150405")
 	now := time.Now()
 	newGroup := &pb.TaskGroup{
-		GroupId:     groupId,
+		GroupId:     uuid.NewString(),
 		UserId:      req.UserId,
 		Name:        req.Name,
 		Description: req.Description,
@@ -168,12 +168,17 @@ func (s *Service) GetTaskGroups(ctx context.Context, req *pb.GetTaskGroupsReques
 
 	var groups []*pb.TaskGroup
 	for rows.Next() {
-		var group pb.TaskGroup
-		group.UserId = req.UserId
-		if err := rows.Scan(&group.GroupId, &group.Name, &group.Description, &group.CreatedAt, &group.UpdatedAt); err != nil {
+		var (
+			group     pb.TaskGroup
+			createdAt time.Time
+			updatedAt time.Time
+		)
+		if err := rows.Scan(&group.GroupId, &group.Name, &group.Description, &createdAt, &updatedAt); err != nil {
 			log.Printf("Error scanning task group: %v", err)
 			return nil, status.Error(codes.Internal, "failed to scan task group")
 		}
+		group.CreatedAt = timestamppb.New(createdAt)
+		group.UpdatedAt = timestamppb.New(updatedAt)
 		groups = append(groups, &group)
 	}
 
