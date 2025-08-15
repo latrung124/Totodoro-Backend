@@ -18,6 +18,8 @@ import (
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func setupTestDB() (*database.Connections, error) {
@@ -127,5 +129,45 @@ func TestGetTaskGroups(t *testing.T) {
 	if resp.Groups[0].GroupId != groupId || resp.Groups[0].Name != name {
 		t.Errorf("Expected group ID %s and name %s, got ID %s and name %s",
 			groupId, name, resp.Groups[0].GroupId, resp.Groups[0].Name)
+	}
+}
+
+func TestCreateTaskGroup_InvalidUserId(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	req := &pb.CreateTaskGroupRequest{
+		UserId:      "",
+		Name:        "Invalid User ID Group",
+		Description: "This group has an invalid user ID",
+	}
+
+	_, err = service.CreateTaskGroup(context.Background(), req)
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Expected InvalidArgument error, got %v", err)
+	}
+}
+
+func TestGetTaskGroups_InvalidUserId(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	req := &pb.GetTaskGroupsRequest{
+		UserId: "",
+	}
+
+	_, err = service.GetTaskGroups(context.Background(), req)
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Expected InvalidArgument error, got %v", err)
 	}
 }
