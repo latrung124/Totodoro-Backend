@@ -10,6 +10,7 @@ package task_management
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"time"
 
@@ -109,7 +110,14 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	rows, err := s.db.TaskDB.QueryContext(ctx, "SELECT task_id, group_id, title, description, created_at, updated_at FROM tasks WHERE user_id = $1", req.UserId)
+	rows, err := s.db.TaskDB.QueryContext(ctx, `
+        SELECT
+            task_id, group_id, name, description,
+            priority, status, total_pomodoros, completed_pomodoros, progress,
+            deadline, created_at, updated_at
+        FROM tasks
+        WHERE user_id = $1
+    `, req.UserId)
 	if err != nil {
 		log.Printf("Error fetching tasks: %v", err)
 		return nil, status.Error(codes.Internal, "failed to fetch tasks")
@@ -118,13 +126,55 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 
 	var tasks []*pb.Task
 	for rows.Next() {
-		var task pb.Task
-		task.UserId = req.UserId
-		if err := rows.Scan(&task.TaskId, &task.GroupId, &task.Name, &task.Description, &task.CreatedAt, &task.UpdatedAt); err != nil {
+		var (
+			task                 pb.Task
+			priorityInt          int32
+			statusInt            int32
+			totalPomodoros       int32
+			completedPomodoros   int32
+			progress             int32
+			deadlineNT           sql.NullTime
+			createdAt, updatedAt time.Time
+		)
+
+		if err := rows.Scan(
+			&task.TaskId,
+			&task.GroupId,
+			&task.Name,
+			&task.Description,
+			&priorityInt,
+			&statusInt,
+			&totalPomodoros,
+			&completedPomodoros,
+			&progress,
+			&deadlineNT,
+			&createdAt,
+			&updatedAt,
+		); err != nil {
 			log.Printf("Error scanning task: %v", err)
 			return nil, status.Error(codes.Internal, "failed to scan task")
 		}
+
+		task.UserId = req.UserId
+		task.Priority = pb.TaskPriority(priorityInt)
+		task.Status = pb.TaskStatus(statusInt)
+		task.TotalPomodoros = totalPomodoros
+		task.CompletedPomodoros = completedPomodoros
+		task.Progress = progress
+		if deadlineNT.Valid {
+			task.Deadline = timestamppb.New(deadlineNT.Time)
+		} else {
+			task.Deadline = nil
+		}
+		task.CreatedAt = timestamppb.New(createdAt)
+		task.UpdatedAt = timestamppb.New(updatedAt)
+
 		tasks = append(tasks, &task)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Row iteration error: %v", err)
+		return nil, status.Error(codes.Internal, "failed to fetch tasks")
 	}
 
 	return &pb.GetTasksResponse{Tasks: tasks}, nil
