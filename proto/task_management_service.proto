@@ -6,27 +6,70 @@ option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_packa
 
 import "google/protobuf/timestamp.proto";
 
+// ==== ENUMS ====
+enum TaskGroupPriority {
+  TASK_GROUP_PRIORITY_UNSPECIFIED = 0;
+  TASK_GROUP_PRIORITY_LOW = 1;
+  TASK_GROUP_PRIORITY_MEDIUM = 2;
+  TASK_GROUP_PRIORITY_HIGH = 3;
+}
+
+enum TaskGroupStatus {
+  TASK_GROUP_STATUS_UNSPECIFIED = 0;
+  TASK_GROUP_STATUS_IDLE = 1;
+  TASK_GROUP_STATUS_PENDING = 2;
+  TASK_GROUP_STATUS_IN_PROGRESS = 3;
+  TASK_GROUP_STATUS_COMPLETED = 4;
+}
+
+enum TaskPriority {
+  TASK_PRIORITY_UNSPECIFIED = 0;
+  TASK_PRIORITY_LOW = 1;
+  TASK_PRIORITY_MEDIUM = 2;
+  TASK_PRIORITY_HIGH = 3;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_IDLE = 1;
+  TASK_STATUS_PENDING = 2;
+  TASK_STATUS_IN_PROGRESS = 3;
+  TASK_STATUS_COMPLETED = 4;
+}
+
+// ==== MODELS ====
+
 // Represents a group of related tasks.
 message TaskGroup {
-  string group_id = 1;                     // UUID
-  string user_id = 2;                      // Foreign key to User (from UserProfile service)
-  string name = 3;                         // Group name
-  string description = 4;                  // Optional
-  google.protobuf.Timestamp created_at = 5;
-  google.protobuf.Timestamp updated_at = 6;
+  string group_id = 1;                     
+  string user_id = 2;                      
+  string icon = 3;                         
+  string name = 4;                         
+  string description = 5;                  
+  google.protobuf.Timestamp deadline = 6;  
+  TaskGroupPriority priority = 7;          
+  TaskGroupStatus status = 8;              
+  int32 completed_tasks = 9;               
+  int32 total_tasks = 10;                  
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
 }
 
 // Represents an individual task.
 message Task {
-  string task_id = 1;                      // UUID
-  string user_id = 2;                      // Foreign key to User (from UserProfile service)
-  string group_id = 3;                     // Foreign key to TaskGroup (nullable)
-  string title = 4;
-  string description = 5;
-  bool is_completed = 6;
-  google.protobuf.Timestamp deadline = 7;  // Optional
-  google.protobuf.Timestamp created_at = 8;
-  google.protobuf.Timestamp updated_at = 9;
+  string task_id = 1;                      
+  string user_id = 2;                      
+  string group_id = 3;                     
+  string name = 4;                         
+  string description = 5;                  
+  int32 completed_pomodoros = 6;           
+  int32 total_pomodoros = 7;               
+  int32 progress = 8;                      
+  TaskPriority priority = 9;               
+  TaskStatus status = 10;                  
+  google.protobuf.Timestamp deadline = 11; 
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
 }
 
 // ==== REQUESTS AND RESPONSES ====
@@ -34,8 +77,12 @@ message Task {
 // TaskGroup CRUD
 message CreateTaskGroupRequest {
   string user_id = 1;
-  string name = 2;
-  string description = 3;
+  string icon = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp deadline = 5;
+  TaskGroupPriority priority = 6;
+  TaskGroupStatus status = 7;
 }
 
 message CreateTaskGroupResponse {
@@ -54,9 +101,12 @@ message GetTaskGroupsResponse {
 message CreateTaskRequest {
   string user_id = 1;
   string group_id = 2;
-  string title = 3;
+  string name = 3;
   string description = 4;
   google.protobuf.Timestamp deadline = 5;
+  TaskPriority priority = 6;
+  TaskStatus status = 7;
+  int32 total_pomodoros = 8;
 }
 
 message CreateTaskResponse {
@@ -74,10 +124,14 @@ message GetTasksResponse {
 
 message UpdateTaskRequest {
   string task_id = 1;
-  string title = 2;
+  string name = 2;
   string description = 3;
   google.protobuf.Timestamp deadline = 4;
-  bool is_completed = 5;
+  TaskPriority priority = 5;
+  TaskStatus status = 6;
+  int32 completed_pomodoros = 7;
+  int32 total_pomodoros = 8;
+  int32 progress = 9;
 }
 
 message UpdateTaskResponse {
