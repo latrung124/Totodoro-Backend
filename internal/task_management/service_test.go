@@ -20,6 +20,7 @@ import (
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func setupTestDB() (*database.Connections, error) {
@@ -169,5 +170,94 @@ func TestGetTaskGroups_InvalidUserId(t *testing.T) {
 	_, err = service.GetTaskGroups(context.Background(), req)
 	if err == nil || status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("Expected InvalidArgument error, got %v", err)
+	}
+}
+
+func seedTask(
+	t *testing.T,
+	db *sql.DB,
+	taskId, userId, groupId, name, description string,
+	priority pb.TaskPriority,
+	status pb.TaskStatus,
+	totalPomodoros, completedPomodoros, progress int32,
+	deadline *time.Time,
+) {
+	t.Helper()
+
+	now := time.Now()
+
+	var deadlineVal any
+	if deadline != nil {
+		deadlineVal = *deadline
+	} else {
+		deadlineVal = nil // INSERT NULL when no deadline provided
+	}
+
+	_, err := db.Exec(
+		`INSERT INTO tasks (
+            task_id, user_id, group_id, name, description,
+            priority, status, total_pomodoros, completed_pomodoros, progress,
+            deadline, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		taskId,
+		userId,
+		groupId,
+		name,
+		description,
+		int32(priority),
+		int32(status),
+		totalPomodoros,
+		completedPomodoros,
+		progress,
+		deadlineVal,
+		now,
+		now,
+	)
+	if err != nil {
+		t.Fatalf("failed to seed task: %v", err)
+	}
+}
+
+func TestCreateTask(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	groupId := uuid.NewString()
+	taskId := uuid.NewString()
+	name := "Test Task"
+	description := "This is a test task"
+	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
+	status := pb.TaskStatus_TASK_STATUS_IDLE
+	totalPomodoros := int32(2)
+	deadline := time.Now().Add(24 * time.Hour)
+
+	seedTaskGroup(t, connections.TaskDB, groupId, userId, "Test Group", "This is a test group")
+	defer RemoveTaskGroup(connections, groupId)
+
+	req := &pb.CreateTaskRequest{
+		UserId:         userId,
+		GroupId:        groupId,
+		Name:           name,
+		Description:    description,
+		Priority:       priority,
+		Status:         status,
+		TotalPomodoros: totalPomodoros,
+		Deadline:       timestamppb.New(deadline),
+	}
+
+	resp, err := service.CreateTask(context.Background(), req)
+	if err != nil {
+		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	if resp.Task.TaskId != taskId || resp.Task.Name != name {
+		t.Errorf("Expected task ID %s and name %s, got ID %s and name %s",
+			taskId, name, resp.Task.TaskId, resp.Task.Name)
 	}
 }

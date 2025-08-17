@@ -40,23 +40,62 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 		return nil, status.Error(codes.InvalidArgument, "group_id is required")
 	}
 
-	if req.Title == "" {
+	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "title is required")
 	}
 
-	// Simulate database insert (replace with actual SQL)
-	taskId := uuid.NewString()
-	now := time.Now()
-	newTask := &pb.Task{
-		TaskId:      taskId,
-		UserId:      req.UserId,
-		GroupId:     req.GroupId,
-		Description: req.Description,
-		CreatedAt:   timestamppb.New(now),
-		UpdatedAt:   timestamppb.New(now),
+	if req.TotalPomodoros <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "total_pomodoros must be greater than 0")
 	}
 
-	_, err := s.db.TaskDB.ExecContext(ctx, "INSERT INTO tasks (task_id, user_id, group_id, title, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)", newTask.TaskId, newTask.UserId, newTask.GroupId, req.Title, req.Description, now, now)
+	taskId := uuid.NewString()
+	now := time.Now()
+
+	var deadlineVal any
+	if req.Deadline != nil {
+		deadlineVal = req.Deadline.AsTime()
+	} else {
+		deadlineVal = nil // Use NULL for deadline if not provided
+	}
+
+	newTask := &pb.Task{
+		TaskId:             taskId,
+		UserId:             req.UserId,
+		GroupId:            req.GroupId,
+		Name:               req.Name,
+		Description:        req.Description,
+		CompletedPomodoros: 0,
+		TotalPomodoros:     req.TotalPomodoros,
+		Progress:           0,
+		Priority:           req.Priority,
+		Status:             req.Status,
+		Deadline:           req.Deadline,
+		CreatedAt:          timestamppb.New(now),
+		UpdatedAt:          timestamppb.New(now),
+	}
+
+	_, err := s.db.TaskDB.ExecContext(
+		ctx,
+		`INSERT INTO tasks (
+            task_id, user_id, group_id, name, description,
+            priority, status, total_pomodoros, completed_pomodoros, progress,
+            deadline, created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+		newTask.TaskId,
+		newTask.UserId,
+		newTask.GroupId,
+		newTask.Name,
+		newTask.Description,
+		newTask.Priority, // enum stored as int
+		newTask.Status,   // enum stored as int
+		newTask.TotalPomodoros,
+		newTask.CompletedPomodoros,
+		newTask.Progress,
+		deadlineVal, // nil/NULL or time.Time
+		now,
+		now,
+	)
+
 	if err != nil {
 		log.Printf("Error creating task: %v", err)
 		return nil, status.Error(codes.Internal, "failed to create task")
@@ -81,7 +120,7 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 	for rows.Next() {
 		var task pb.Task
 		task.UserId = req.UserId
-		if err := rows.Scan(&task.TaskId, &task.GroupId, &task.Title, &task.Description, &task.CreatedAt, &task.UpdatedAt); err != nil {
+		if err := rows.Scan(&task.TaskId, &task.GroupId, &task.Name, &task.Description, &task.CreatedAt, &task.UpdatedAt); err != nil {
 			log.Printf("Error scanning task: %v", err)
 			return nil, status.Error(codes.Internal, "failed to scan task")
 		}
@@ -97,7 +136,7 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	}
 
 	// update the task in the database
-	_, err := s.db.TaskDB.ExecContext(ctx, "UPDATE tasks SET title = $1, description = $2, deadline = $3, isCompleted = $4 WHERE task_id = $5", req.Title, req.Description, req.Deadline, req.IsCompleted, req.TaskId)
+	_, err := s.db.TaskDB.ExecContext(ctx, "UPDATE tasks SET title = $1, description = $2, deadline = $3 WHERE task_id = $4", req.Name, req.Description, req.Deadline, req.TaskId)
 	if err != nil {
 		log.Printf("Error updating task: %v", err)
 		return nil, status.Error(codes.Internal, "failed to update task")
@@ -110,7 +149,7 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		&updatedTask.TaskId,
 		&updatedTask.UserId,
 		&updatedTask.GroupId,
-		&updatedTask.Title,
+		&updatedTask.Name,
 		&updatedTask.Description,
 		&updatedTask.CreatedAt,
 		&updatedTask.UpdatedAt,
