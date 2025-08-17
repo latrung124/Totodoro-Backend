@@ -185,34 +185,102 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		return nil, status.Error(codes.InvalidArgument, "task_id is required")
 	}
 
-	// update the task in the database
-	_, err := s.db.TaskDB.ExecContext(ctx, "UPDATE tasks SET title = $1, description = $2, deadline = $3 WHERE task_id = $4", req.Name, req.Description, req.Deadline, req.TaskId)
+	now := time.Now()
+
+	// Handle optional deadline
+	var deadlineVal any
+	if req.Deadline != nil {
+		deadlineVal = req.Deadline.AsTime()
+	} else {
+		deadlineVal = nil // store NULL when not provided
+	}
+
+	// Update task using the correct columns
+	res, err := s.db.TaskDB.ExecContext(ctx, `
+        UPDATE tasks SET
+            name = $1,
+            description = $2,
+            priority = $3,
+            status = $4,
+            total_pomodoros = $5,
+            completed_pomodoros = $6,
+            progress = $7,
+            deadline = $8,
+            updated_at = $9
+        WHERE task_id = $10
+    `,
+		req.Name,
+		req.Description,
+		int32(req.Priority),
+		int32(req.Status),
+		req.TotalPomodoros,
+		req.CompletedPomodoros,
+		req.Progress,
+		deadlineVal,
+		now,
+		req.TaskId,
+	)
 	if err != nil {
 		log.Printf("Error updating task: %v", err)
 		return nil, status.Error(codes.Internal, "failed to update task")
 	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return nil, status.Error(codes.NotFound, "task not found")
+	}
 
-	// Assuming the task is updated successfully, we can return the updated task
-	// Query the updated task from the database
-	var updatedTask pb.Task
-	err = s.db.TaskDB.QueryRowContext(ctx, "SELECT task_id, user_id, group_id, title, description, created_at, updated_at FROM tasks WHERE task_id = $1", req.TaskId).Scan(
-		&updatedTask.TaskId,
-		&updatedTask.UserId,
-		&updatedTask.GroupId,
-		&updatedTask.Name,
-		&updatedTask.Description,
-		&updatedTask.CreatedAt,
-		&updatedTask.UpdatedAt,
+	// Fetch and return the updated task (convert DB types to protobuf types)
+	var (
+		task                 pb.Task
+		priorityInt          int32
+		statusInt            int32
+		totalPomodoros       int32
+		completedPomodoros   int32
+		progress             int32
+		deadlineNT           sql.NullTime
+		createdAt, updatedAt time.Time
+	)
+	err = s.db.TaskDB.QueryRowContext(ctx, `
+        SELECT
+            task_id, user_id, group_id, name, description,
+            priority, status, total_pomodoros, completed_pomodoros, progress,
+            deadline, created_at, updated_at
+        FROM tasks
+        WHERE task_id = $1
+    `, req.TaskId).Scan(
+		&task.TaskId,
+		&task.UserId,
+		&task.GroupId,
+		&task.Name,
+		&task.Description,
+		&priorityInt,
+		&statusInt,
+		&totalPomodoros,
+		&completedPomodoros,
+		&progress,
+		&deadlineNT,
+		&createdAt,
+		&updatedAt,
 	)
 	if err != nil {
 		log.Printf("Error fetching updated task: %v", err)
 		return nil, status.Error(codes.Internal, "failed to fetch updated task")
 	}
-	if updatedTask.TaskId == "" {
-		return nil, status.Error(codes.NotFound, "task not found")
-	}
 
-	return &pb.UpdateTaskResponse{Task: &updatedTask}, nil
+	task.Priority = pb.TaskPriority(priorityInt)
+	task.Status = pb.TaskStatus(statusInt)
+	task.TotalPomodoros = totalPomodoros
+	task.CompletedPomodoros = completedPomodoros
+	task.Progress = progress
+	if deadlineNT.Valid {
+		task.Deadline = timestamppb.New(deadlineNT.Time)
+	} else {
+		task.Deadline = nil
+	}
+	task.CreatedAt = timestamppb.New(createdAt)
+	task.UpdatedAt = timestamppb.New(updatedAt)
+
+	return &pb.UpdateTaskResponse{Task: &task}, nil
 }
 
 func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRequest) (*pb.CreateTaskGroupResponse, error) {
