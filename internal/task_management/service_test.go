@@ -306,3 +306,23 @@ func TestGetTasks(t *testing.T) {
 			taskId, name, resp.Tasks[0].TaskId, resp.Tasks[0].Name)
 	}
 }
+
+func TestGetTasks_InvalidUserId(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	req := &pb.GetTasksRequest{
+		UserId:  "",
+		GroupId: uuid.NewString(),
+	}
+
+	_, err = service.GetTasks(context.Background(), req)
+	if err == nil || status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("Expected InvalidArgument error, got %v", err)
+	}
+}
