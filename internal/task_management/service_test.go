@@ -218,6 +218,16 @@ func seedTask(
 	}
 }
 
+func RemoveTask(connections *database.Connections, taskId string) {
+	// Remove test rows from the tasks table
+	_, err := connections.TaskDB.Exec("DELETE FROM tasks WHERE task_id = $1", taskId)
+	if err != nil {
+		log.Printf("Failed to clean up test task: %v", err)
+	} else {
+		log.Println("Test task cleaned up successfully")
+	}
+}
+
 func TestCreateTask(t *testing.T) {
 	connections, err := setupTestDB()
 	if err != nil {
@@ -260,6 +270,14 @@ func TestCreateTask(t *testing.T) {
 		t.Errorf("Expected task ID %s and name %s, got ID %s and name %s",
 			taskId, name, resp.Task.TaskId, resp.Task.Name)
 	}
+
+	// Clean up the task after the test
+	RemoveTask(connections, resp.Task.TaskId)
+	if err != nil {
+		t.Fatalf("Failed to clean up test task: %v", err)
+	} else {
+		log.Println("Test task cleaned up successfully")
+	}
 }
 
 func TestGetTasks(t *testing.T) {
@@ -286,6 +304,7 @@ func TestGetTasks(t *testing.T) {
 
 	seedTask(t, connections.TaskDB, taskId, userId, groupId, name, description,
 		priority, status, totalPomodoros, 0, 0, &deadline)
+	defer RemoveTask(connections, taskId)
 
 	req := &pb.GetTasksRequest{
 		UserId:  userId,
@@ -324,5 +343,92 @@ func TestGetTasks_InvalidUserId(t *testing.T) {
 	_, err = service.GetTasks(context.Background(), req)
 	if err == nil || status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("Expected InvalidArgument error, got %v", err)
+	}
+}
+
+func TestUpdateTask(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	groupId := uuid.NewString()
+	taskId := uuid.NewString()
+	name := "Test Task"
+	description := "This is a test task"
+	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
+	status := pb.TaskStatus_TASK_STATUS_IDLE
+	totalPomodoros := int32(3)
+	completedPomodoros := int32(1)
+	progress := int32(60)
+	deadline := time.Now().Add(24 * time.Hour)
+
+	seedTaskGroup(t, connections.TaskDB, groupId, userId, "Test Group", "This is a test group")
+	defer RemoveTaskGroup(connections, groupId)
+
+	seedTask(t, connections.TaskDB, taskId, userId, groupId, name, description,
+		priority, status, totalPomodoros, 0, 0, &deadline)
+	defer RemoveTask(connections, taskId)
+
+	newName := "Updated Task Name"
+	newDescription := "Updated task description"
+	newPriority := pb.TaskPriority_TASK_PRIORITY_HIGH
+	newStatus := pb.TaskStatus_TASK_STATUS_IN_PROGRESS
+
+	req := &pb.UpdateTaskRequest{
+		TaskId:             taskId,
+		Name:               newName,
+		Description:        newDescription,
+		Priority:           newPriority,
+		Status:             newStatus,
+		TotalPomodoros:     totalPomodoros,
+		CompletedPomodoros: completedPomodoros,
+		Progress:           progress,
+		Deadline:           timestamppb.New(deadline),
+	}
+
+	resp, err := service.UpdateTask(context.Background(), req)
+	if err != nil {
+		t.Fatalf("UpdateTask failed: %v", err)
+	}
+
+	if resp.Task.TaskId != taskId {
+		t.Errorf("Expected task ID %s, got %s", taskId, resp.Task.TaskId)
+	}
+
+	if resp.Task.Name != newName {
+		t.Errorf("Expected task name %s, got %s", newName, resp.Task.Name)
+	}
+
+	if resp.Task.Description != newDescription {
+		t.Errorf("Expected task description %s, got %s", newDescription, resp.Task.Description)
+	}
+
+	if resp.Task.Priority != newPriority {
+		t.Errorf("Expected task priority %v, got %v", newPriority, resp.Task.Priority)
+	}
+
+	if resp.Task.Status != newStatus {
+		t.Errorf("Expected task status %v, got %v", newStatus, resp.Task.Status)
+	}
+
+	if resp.Task.TotalPomodoros != totalPomodoros {
+		t.Errorf("Expected total pomodoros %d, got %d", totalPomodoros, resp.Task.TotalPomodoros)
+	}
+
+	if resp.Task.CompletedPomodoros != completedPomodoros {
+		t.Errorf("Expected completed pomodoros %d, got %d", completedPomodoros, resp.Task.CompletedPomodoros)
+	}
+
+	if resp.Task.Progress != progress {
+		t.Errorf("Expected progress %d, got %d", progress, resp.Task.Progress)
+	}
+
+	if resp.Task.Deadline.AsTime().Equal(deadline) == false {
+		t.Errorf("Expected deadline %v, got %v", deadline, resp.Task.Deadline.AsTime())
 	}
 }
