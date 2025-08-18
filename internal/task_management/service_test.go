@@ -261,3 +261,48 @@ func TestCreateTask(t *testing.T) {
 			taskId, name, resp.Task.TaskId, resp.Task.Name)
 	}
 }
+
+func TestGetTasks(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	groupId := uuid.NewString()
+	taskId := uuid.NewString()
+	name := "Test Task"
+	description := "This is a test task"
+	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
+	status := pb.TaskStatus_TASK_STATUS_IDLE
+	totalPomodoros := int32(2)
+	deadline := time.Now().Add(24 * time.Hour)
+
+	seedTaskGroup(t, connections.TaskDB, groupId, userId, "Test Group", "This is a test group")
+	defer RemoveTaskGroup(connections, groupId)
+
+	seedTask(t, connections.TaskDB, taskId, userId, groupId, name, description,
+		priority, status, totalPomodoros, 0, 0, &deadline)
+
+	req := &pb.GetTasksRequest{
+		UserId:  userId,
+		GroupId: groupId,
+	}
+
+	resp, err := service.GetTasks(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetTasks failed: %v", err)
+	}
+
+	if len(resp.Tasks) == 0 {
+		t.Fatal("Expected at least one task")
+	}
+
+	if resp.Tasks[0].TaskId != taskId || resp.Tasks[0].Name != name {
+		t.Errorf("Expected task ID %s and name %s, got ID %s and name %s",
+			taskId, name, resp.Tasks[0].TaskId, resp.Tasks[0].Name)
+	}
+}
