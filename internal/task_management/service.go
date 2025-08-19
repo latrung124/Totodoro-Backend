@@ -59,6 +59,34 @@ func toDBTaskGroupStatus(s pb.TaskGroupStatus) string {
 	}
 }
 
+func toDBTaskPriority(p pb.TaskPriority) string {
+	switch p {
+	case pb.TaskPriority_TASK_PRIORITY_LOW:
+		return "low"
+	case pb.TaskPriority_TASK_PRIORITY_MEDIUM:
+		return "medium"
+	case pb.TaskPriority_TASK_PRIORITY_HIGH:
+		return "high"
+	default:
+		return "medium"
+	}
+}
+
+func toDBTaskStatus(s pb.TaskStatus) string {
+	switch s {
+	case pb.TaskStatus_TASK_STATUS_IDLE:
+		return "idle"
+	case pb.TaskStatus_TASK_STATUS_COMPLETED:
+		return "completed"
+	case pb.TaskStatus_TASK_STATUS_PENDING:
+		return "pending"
+	case pb.TaskStatus_TASK_STATUS_IN_PROGRESS:
+		return "in progress"
+	default:
+		return "idle"
+	}
+}
+
 // CreateTask creates a new task for a user.
 func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb.CreateTaskResponse, error) {
 	if req.UserId == "" {
@@ -103,6 +131,9 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 		UpdatedAt:          timestamppb.New(now),
 	}
 
+	priorityLabel := toDBTaskPriority(req.Priority)
+	statusLabel := toDBTaskStatus(req.Status)
+
 	_, err := s.db.TaskDB.ExecContext(
 		ctx,
 		`INSERT INTO tasks (
@@ -115,8 +146,8 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 		newTask.GroupId,
 		newTask.Name,
 		newTask.Description,
-		newTask.Priority, // enum stored as int
-		newTask.Status,   // enum stored as int
+		priorityLabel,
+		statusLabel,
 		newTask.TotalPomodoros,
 		newTask.CompletedPomodoros,
 		newTask.Progress,

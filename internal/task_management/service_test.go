@@ -51,8 +51,8 @@ func seedTaskGroup(t *testing.T, db *sql.DB, groupId string, userId string, name
 	now := time.Now()
 	icon := ""
 	var deadline any = nil
-	priority := int32(0) // UNSPECIFIED
-	status := int32(0)   // UNSPECIFIED
+	priority := "medium"
+	status := "idle"
 	completedTasks := int32(0)
 	totalTasks := int32(0)
 
@@ -301,8 +301,8 @@ func seedTask(
 		groupId,
 		name,
 		description,
-		int32(priority),
-		int32(status),
+		string(toDBTaskPriority(priority)),
+		string(toDBTaskStatus(status)),
 		totalPomodoros,
 		completedPomodoros,
 		progress,
@@ -336,7 +336,6 @@ func TestCreateTask(t *testing.T) {
 
 	userId := uuid.NewString()
 	groupId := uuid.NewString()
-	taskId := uuid.NewString()
 	name := "Test Task"
 	description := "This is a test task"
 	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
@@ -363,9 +362,9 @@ func TestCreateTask(t *testing.T) {
 		t.Fatalf("CreateTask failed: %v", err)
 	}
 
-	if resp.Task.TaskId != taskId || resp.Task.Name != name {
-		t.Errorf("Expected task ID %s and name %s, got ID %s and name %s",
-			taskId, name, resp.Task.TaskId, resp.Task.Name)
+	if resp.Task.Name != name {
+		t.Errorf("Expected name %s, got name %s",
+			name, resp.Task.Name)
 	}
 
 	// Clean up the task after the test
