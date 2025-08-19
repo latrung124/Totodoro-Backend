@@ -31,6 +31,34 @@ func NewService(db *database.Connections) *Service {
 	return &Service{db: db}
 }
 
+func toDBTaskGroupPriority(p pb.TaskGroupPriority) string {
+	switch p {
+	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_LOW:
+		return "low"
+	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_MEDIUM:
+		return "medium"
+	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_HIGH:
+		return "high"
+	default:
+		return "medium"
+	}
+}
+
+func toDBTaskGroupStatus(s pb.TaskGroupStatus) string {
+	switch s {
+	case pb.TaskGroupStatus_TASK_GROUP_STATUS_IDLE:
+		return "idle"
+	case pb.TaskGroupStatus_TASK_GROUP_STATUS_COMPLETED:
+		return "completed"
+	case pb.TaskGroupStatus_TASK_GROUP_STATUS_PENDING:
+		return "pending"
+	case pb.TaskGroupStatus_TASK_GROUP_STATUS_IN_PROGRESS:
+		return "in progress"
+	default:
+		return "idle"
+	}
+}
+
 // CreateTask creates a new task for a user.
 func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb.CreateTaskResponse, error) {
 	if req.UserId == "" {
@@ -287,22 +315,59 @@ func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRe
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
-
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name is required")
 	}
 
 	now := time.Now()
-	newGroup := &pb.TaskGroup{
-		GroupId:     uuid.NewString(),
-		UserId:      req.UserId,
-		Name:        req.Name,
-		Description: req.Description,
-		CreatedAt:   timestamppb.New(now),
-		UpdatedAt:   timestamppb.New(now),
+	groupID := uuid.NewString()
+
+	var deadlineVal any
+	if req.Deadline != nil {
+		deadlineVal = req.Deadline.AsTime()
+	} else {
+		deadlineVal = nil
 	}
 
-	_, err := s.db.TaskDB.ExecContext(ctx, "INSERT INTO task_groups (group_id, user_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)", newGroup.GroupId, newGroup.UserId, newGroup.Name, newGroup.Description, now, now)
+	priorityLabel := toDBTaskGroupPriority(req.Priority)
+	statusLabel := toDBTaskGroupStatus(req.Status)
+
+	newGroup := &pb.TaskGroup{
+		GroupId:        groupID,
+		UserId:         req.UserId,
+		Icon:           req.Icon,
+		Name:           req.Name,
+		Description:    req.Description,
+		Deadline:       req.Deadline,
+		Priority:       req.Priority,
+		Status:         req.Status,
+		CompletedTasks: 0,
+		TotalTasks:     0,
+		CreatedAt:      timestamppb.New(now),
+		UpdatedAt:      timestamppb.New(now),
+	}
+
+	_, err := s.db.TaskDB.ExecContext(
+		ctx,
+		`INSERT INTO task_groups (
+            group_id, user_id, icon, name, description, deadline,
+            priority, status, completed_tasks, total_tasks,
+            created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		newGroup.GroupId,
+		newGroup.UserId,
+		newGroup.Icon,
+		newGroup.Name,
+		newGroup.Description,
+		deadlineVal,
+		priorityLabel,
+		statusLabel,
+		newGroup.CompletedTasks,
+		newGroup.TotalTasks,
+		now,
+		now,
+	)
+
 	if err != nil {
 		log.Printf("Error creating task group: %v", err)
 		return nil, status.Error(codes.Internal, "failed to create task group")

@@ -46,9 +46,25 @@ func setupTestDB() (*database.Connections, error) {
 }
 
 func seedTaskGroup(t *testing.T, db *sql.DB, groupId string, userId string, name string, description string) {
+	t.Helper()
+
+	now := time.Now()
+	icon := ""
+	var deadline any = nil
+	priority := int32(0) // UNSPECIFIED
+	status := int32(0)   // UNSPECIFIED
+	completedTasks := int32(0)
+	totalTasks := int32(0)
+
 	_, err := db.Exec(
-		`INSERT INTO task_groups (group_id, user_id, name, description, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)`,
-		groupId, userId, name, description, time.Now(), time.Now(),
+		`INSERT INTO task_groups (
+            group_id, user_id, icon, name, description, deadline,
+            priority, status, completed_tasks, total_tasks,
+            created_at, updated_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		groupId, userId, icon, name, description, deadline,
+		priority, status, completedTasks, totalTasks,
+		now, now,
 	)
 	if err != nil {
 		t.Fatalf("Failed to seed task group: %v", err)
@@ -72,29 +88,110 @@ func TestCreateTaskGroup(t *testing.T) {
 	}
 	defer connections.Close()
 
+	service := NewService(connections)
+
 	userId := uuid.NewString()
 	name := "Test Task Group"
+	icon := "This is a test icon"
 	description := "This is a test task group"
-
-	service := NewService(connections)
+	deadline := time.Now().Add(24 * time.Hour)
+	priority := pb.TaskGroupPriority_TASK_GROUP_PRIORITY_MEDIUM
+	status := pb.TaskGroupStatus_TASK_GROUP_STATUS_UNSPECIFIED
 
 	req := &pb.CreateTaskGroupRequest{
 		UserId:      userId,
 		Name:        name,
+		Icon:        icon,
 		Description: description,
+		Deadline:    timestamppb.New(deadline),
+		Priority:    priority,
+		Status:      status,
+		// Icon, Deadline, Priority, Status left as zero-values
 	}
 
 	resp, err := service.CreateTaskGroup(context.Background(), req)
 	if err != nil {
 		t.Fatalf("CreateTaskGroup failed: %v", err)
 	}
+	defer RemoveTaskGroup(connections, resp.Group.GroupId)
 
-	if resp.Group.Name != name {
-		t.Errorf("Expected name %s, got ID %s and name %s",
-			name, resp.Group.GroupId, resp.Group.Name)
+	if resp.Group == nil {
+		t.Fatal("Response group is nil")
 	}
 
-	RemoveTaskGroup(connections, resp.Group.GroupId)
+	if resp.Group.UserId != userId {
+		t.Errorf("Expected user_id %s, got %s", userId, resp.Group.UserId)
+	}
+
+	if resp.Group.Name != name {
+		t.Errorf("Expected name %q, got %q", name, resp.Group.Name)
+	}
+
+	if resp.Group.Icon != icon {
+		t.Errorf("Expected icon %q, got %q", icon, resp.Group.Icon)
+	}
+
+	if resp.Group.Deadline == nil || !resp.Group.Deadline.AsTime().Equal(deadline) {
+		t.Errorf("Expected deadline %v, got %v", deadline, resp.Group.Deadline.AsTime())
+	}
+
+	if resp.Group.Priority != priority {
+		t.Errorf("Expected priority MEDIUM, got %v", resp.Group.Priority)
+	}
+
+	if resp.Group.Description != description {
+		t.Errorf("Expected description %q, got %q", description, resp.Group.Description)
+	}
+
+	if resp.Group.Status != pb.TaskGroupStatus_TASK_GROUP_STATUS_UNSPECIFIED {
+		t.Errorf("Expected default status UNSPECIFIED, got %v", resp.Group.Status)
+	}
+
+	if resp.Group.CompletedTasks != 0 || resp.Group.TotalTasks != 0 {
+		t.Errorf("Expected completed_tasks=0 and total_tasks=0, got %d and %d",
+			resp.Group.CompletedTasks, resp.Group.TotalTasks)
+	}
+
+	if resp.Group.CreatedAt.AsTime().After(time.Now().Add(1*time.Second)) ||
+		resp.Group.UpdatedAt.AsTime().After(time.Now().Add(1*time.Second)) {
+		t.Errorf("Invalid timestamps in response")
+	}
+
+	var (
+		gotName, gotIcon, gotDescription, gotPriority, gotStatus string
+		gotCompleted, gotTotal                                   int32
+		deadlineNT                                               sql.NullTime
+	)
+
+	err = connections.TaskDB.QueryRow(`
+        SELECT name, icon, description, priority, status, completed_tasks, total_tasks, deadline
+        FROM task_groups
+        WHERE group_id = $1`, resp.Group.GroupId).Scan(
+		&gotName, &gotIcon, &gotDescription, &gotPriority, &gotStatus, &gotCompleted, &gotTotal, &deadlineNT,
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to fetch created task group: %v", err)
+	}
+
+	if gotName != name || gotDescription != description || gotIcon != icon {
+		t.Errorf("Persisted name/description/icon mismatch: expected %q/%q/%q, got %q/%q/%q",
+			name, description, icon, gotName, gotDescription, gotIcon)
+	}
+
+	priorityLabel := toDBTaskGroupPriority(priority)
+	if gotPriority != string(priorityLabel) {
+		t.Errorf("Persisted priority expected %s, got %s", string(priorityLabel), gotPriority)
+	}
+
+	statusLabel := toDBTaskGroupStatus(status)
+	if gotStatus != string(statusLabel) {
+		t.Errorf("Persisted status expected %s, got %s", string(statusLabel), gotStatus)
+	}
+
+	if gotCompleted != 0 || gotTotal != 0 {
+		t.Errorf("Persisted completed/total expected 0/0, got %d/%d", gotCompleted, gotTotal)
+	}
 }
 
 func TestGetTaskGroups(t *testing.T) {
