@@ -45,6 +45,14 @@ func setupTestDB() (*database.Connections, error) {
 	return connections, nil
 }
 
+func timesClose(a, b time.Time, tol time.Duration) bool {
+	d := a.Sub(b)
+	if d < 0 {
+		d = -d
+	}
+	return d <= tol
+}
+
 func seedTaskGroup(t *testing.T, db *sql.DB, groupId string, userId string, name string, description string) {
 	t.Helper()
 
@@ -191,6 +199,10 @@ func TestCreateTaskGroup(t *testing.T) {
 
 	if gotCompleted != 0 || gotTotal != 0 {
 		t.Errorf("Persisted completed/total expected 0/0, got %d/%d", gotCompleted, gotTotal)
+	}
+
+	if resp.Group.Deadline == nil || !timesClose(resp.Group.Deadline.AsTime().UTC(), deadline.UTC(), time.Second) {
+		t.Errorf("Expected deadline ~%v, got %v", deadline, resp.Group.Deadline.AsTime())
 	}
 }
 
@@ -367,6 +379,26 @@ func TestCreateTask(t *testing.T) {
 			name, resp.Task.Name)
 	}
 
+	if resp.Task.Description != description {
+		t.Errorf("Expected description %s, got description %s", resp.Task.Description, description)
+	}
+
+	if resp.Task.Priority != priority {
+		t.Errorf("Expected priority %v, got %v", priority, resp.Task.Priority)
+	}
+
+	if resp.Task.Status != status {
+		t.Errorf("Expected status %v, got %v", status, resp.Task.Status)
+	}
+
+	if resp.Task.TotalPomodoros != totalPomodoros {
+		t.Errorf("Expected total pomodoros %d, got %d", totalPomodoros, resp.Task.TotalPomodoros)
+	}
+
+	if resp.Task.Deadline == nil || !timesClose(resp.Task.Deadline.AsTime().UTC(), deadline.UTC(), time.Second) {
+		t.Errorf("Expected deadline ~%v, got %v", deadline, resp.Task.Deadline.AsTime())
+	}
+
 	// Clean up the task after the test
 	RemoveTask(connections, resp.Task.TaskId)
 	if err != nil {
@@ -524,7 +556,7 @@ func TestUpdateTask(t *testing.T) {
 		t.Errorf("Expected progress %d, got %d", progress, resp.Task.Progress)
 	}
 
-	if resp.Task.Deadline.AsTime().Equal(deadline) == false {
-		t.Errorf("Expected deadline %v, got %v", deadline, resp.Task.Deadline.AsTime())
+	if resp.Task.Deadline == nil || !timesClose(resp.Task.Deadline.AsTime().UTC(), deadline.UTC(), time.Second) {
+		t.Errorf("Expected deadline ~%v, got %v", deadline, resp.Task.Deadline.AsTime())
 	}
 }

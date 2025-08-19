@@ -87,6 +87,34 @@ func toDBTaskStatus(s pb.TaskStatus) string {
 	}
 }
 
+func toDBTaskPriorityEnum(p string) pb.TaskPriority {
+	switch p {
+	case "low":
+		return pb.TaskPriority_TASK_PRIORITY_LOW
+	case "medium":
+		return pb.TaskPriority_TASK_PRIORITY_MEDIUM
+	case "high":
+		return pb.TaskPriority_TASK_PRIORITY_HIGH
+	default:
+		return pb.TaskPriority_TASK_PRIORITY_MEDIUM // Default to medium if unknown
+	}
+}
+
+func toDBTaskStatusEnum(s string) pb.TaskStatus {
+	switch s {
+	case "idle":
+		return pb.TaskStatus_TASK_STATUS_IDLE
+	case "completed":
+		return pb.TaskStatus_TASK_STATUS_COMPLETED
+	case "pending":
+		return pb.TaskStatus_TASK_STATUS_PENDING
+	case "in progress":
+		return pb.TaskStatus_TASK_STATUS_IN_PROGRESS
+	default:
+		return pb.TaskStatus_TASK_STATUS_IDLE // Default to idle if unknown
+	}
+}
+
 // CreateTask creates a new task for a user.
 func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*pb.CreateTaskResponse, error) {
 	if req.UserId == "" {
@@ -187,8 +215,8 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 	for rows.Next() {
 		var (
 			task                 pb.Task
-			priorityInt          int32
-			statusInt            int32
+			priorityLabel        string
+			statusLabel          string
 			totalPomodoros       int32
 			completedPomodoros   int32
 			progress             int32
@@ -201,8 +229,8 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 			&task.GroupId,
 			&task.Name,
 			&task.Description,
-			&priorityInt,
-			&statusInt,
+			&priorityLabel,
+			&statusLabel,
 			&totalPomodoros,
 			&completedPomodoros,
 			&progress,
@@ -215,8 +243,8 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 		}
 
 		task.UserId = req.UserId
-		task.Priority = pb.TaskPriority(priorityInt)
-		task.Status = pb.TaskStatus(statusInt)
+		task.Priority = toDBTaskPriorityEnum(priorityLabel)
+		task.Status = toDBTaskStatusEnum(statusLabel)
 		task.TotalPomodoros = totalPomodoros
 		task.CompletedPomodoros = completedPomodoros
 		task.Progress = progress
@@ -270,8 +298,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
     `,
 		req.Name,
 		req.Description,
-		int32(req.Priority),
-		int32(req.Status),
+		toDBTaskPriority(req.Priority),
+		toDBTaskStatus(req.Status),
 		req.TotalPomodoros,
 		req.CompletedPomodoros,
 		req.Progress,
@@ -291,8 +319,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	// Fetch and return the updated task (convert DB types to protobuf types)
 	var (
 		task                 pb.Task
-		priorityInt          int32
-		statusInt            int32
+		priorityLabel        string
+		statusLabel          string
 		totalPomodoros       int32
 		completedPomodoros   int32
 		progress             int32
@@ -312,8 +340,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		&task.GroupId,
 		&task.Name,
 		&task.Description,
-		&priorityInt,
-		&statusInt,
+		&priorityLabel,
+		&statusLabel,
 		&totalPomodoros,
 		&completedPomodoros,
 		&progress,
@@ -326,8 +354,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		return nil, status.Error(codes.Internal, "failed to fetch updated task")
 	}
 
-	task.Priority = pb.TaskPriority(priorityInt)
-	task.Status = pb.TaskStatus(statusInt)
+	task.Priority = toDBTaskPriorityEnum(priorityLabel)
+	task.Status = toDBTaskStatusEnum(statusLabel)
 	task.TotalPomodoros = totalPomodoros
 	task.CompletedPomodoros = completedPomodoros
 	task.Progress = progress
