@@ -9,20 +9,30 @@ import "google/protobuf/timestamp.proto";
 // ===== ENUM DEFINITIONS =====
 enum SessionStatus {
   SESSION_STATUS_UNSPECIFIED = 0;
-  COMPLETED = 1;
-  PAUSED = 2;
-  RUNNING = 3;
-  ERROR = 4;
+  SESSION_STATUS_IDLE = 1;
+  SESSION_STATUS_IN_PROGRESS = 2;
+  SESSION_STATUS_PENDING = 3;
+  SESSION_STATUS_COMPLETED = 4;
+}
+
+enum SessionType {
+  SESSION_TYPE_UNSPECIFIED = 0;
+  SESSION_TYPE_SHORT_BREAK = 1;
+  SESSION_TYPE_LONG_BREAK = 2;
 }
 
 // ===== ENTITY DEFINITIONS =====
 message PomodoroSession {
-  string session_id = 1;                    // UUID - Primary key
-  string user_id = 2;                       // Foreign key to UserProfile.users
-  string task_id = 3;                       // Foreign key to TaskManagement.tasks (nullable)
-  google.protobuf.Timestamp start_time = 4; // Required
-  google.protobuf.Timestamp end_time = 5;   // Nullable
-  SessionStatus status = 6;                 // Enum: COMPLETED, SKIPPED, FAILED
+  string session_id = 1;                     // UUID - Primary key
+  string user_id = 2;                        // FK to UserProfile.users
+  string task_id = 3;                        // FK to TaskManagement.tasks (NOT NULL)
+  google.protobuf.Timestamp start_time = 4;  // Required
+  int32 progress = 5;                        // Seconds elapsed
+  google.protobuf.Timestamp end_time = 6;    // Nullable
+  SessionStatus status = 7;                  // Running, Paused, Completed, etc.
+  SessionType session_type = 8;              // Pomodoro, Short Break, Long Break
+  int32 number_in_cycle = 9;                 // Position in pomodoro cycle
+  google.protobuf.Timestamp last_update = 10;// Last updated time
 }
 
 // ===== REQUESTS AND RESPONSES =====
@@ -30,8 +40,8 @@ message CreateSessionRequest {
   string user_id = 1;
   string task_id = 2;
   google.protobuf.Timestamp start_time = 3;
-  google.protobuf.Timestamp end_time = 4;
-  SessionStatus status = 5;
+  SessionType session_type = 4;
+  int32 number_in_cycle = 5;
 }
 
 message CreateSessionResponse {
@@ -49,8 +59,12 @@ message GetSessionsResponse {
 
 message UpdateSessionRequest {
   string session_id = 1;
-  google.protobuf.Timestamp end_time = 2;
-  SessionStatus status = 3;
+  int32 progress = 2;
+  google.protobuf.Timestamp end_time = 3;
+  SessionStatus status = 4;
+  SessionType session_type = 5;
+  int32 number_in_cycle = 6;
+  google.protobuf.Timestamp last_update = 7;
 }
 
 message UpdateSessionResponse {
