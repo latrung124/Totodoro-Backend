@@ -44,16 +44,27 @@ func setupTestDB() (*database.Connections, error) {
 }
 
 func SeedPomodoroSession(t *testing.T, db *sql.DB, sessionId string, userId string, taskId string, startTime time.Time, endTime time.Time) {
-	statusStr := "SESSION_STATUS_UNSPECIFIED"
+	progress := 0
+	statusStr := pb.SessionStatus_name[int32(pb.SessionStatus_SESSION_STATUS_IDLE)]
+	sessionTypeStr := pb.SessionType_name[int32(pb.SessionType_SESSION_TYPE_SHORT_BREAK)]
+	numberInCycle := 0
+	lastUpdate := time.Now()
+
 	_, err := db.Exec(
-		`INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, end_time, status)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		`INSERT INTO sessions (
+            session_id, user_id, task_id, start_time, progress, end_time,
+            status, session_type, number_in_cycle, last_update
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
 		sessionId,
 		userId,
 		taskId,
 		startTime,
+		progress,
 		endTime,
 		statusStr,
+		sessionTypeStr,
+		numberInCycle,
+		lastUpdate,
 	)
 	if err != nil {
 		t.Fatalf("Failed to seed test pomodoro session: %v", err)
@@ -62,7 +73,7 @@ func SeedPomodoroSession(t *testing.T, db *sql.DB, sessionId string, userId stri
 
 func RemovePomodoroSession(connections *database.Connections, sessionId string) {
 	// Remove test rows from the pomodoro_sessions table
-	_, err := connections.PomodoroDB.Exec("DELETE FROM pomodoro_sessions WHERE session_id = $1", sessionId)
+	_, err := connections.PomodoroDB.Exec("DELETE FROM sessions WHERE session_id = $1", sessionId)
 	if err != nil {
 		log.Printf("Failed to clean up test pomodoro session: %v", err)
 	} else {
@@ -82,11 +93,11 @@ func TestCreateSession(t *testing.T) {
 	now := time.Now()
 
 	req := &pb.CreateSessionRequest{
-		UserId:    uuid.NewString(),
-		TaskId:    uuid.NewString(),
-		StartTime: timestamppb.New(now),
-		EndTime:   timestamppb.New(now.Add(25 * time.Minute)),
-		Status:    pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
+		UserId:        uuid.NewString(),
+		TaskId:        uuid.NewString(),
+		StartTime:     timestamppb.New(now),
+		SessionType:   pb.SessionType_SESSION_TYPE_SHORT_BREAK, // per new proto
+		NumberInCycle: 0,
 	}
 
 	resp, err := service.CreateSession(context.Background(), req)
@@ -95,21 +106,35 @@ func TestCreateSession(t *testing.T) {
 	}
 
 	if resp.Session.UserId != req.UserId || resp.Session.TaskId != req.TaskId {
-		t.Errorf("Expected UserId %s and TaskId %s, got UserId %s and TaskId %s", req.UserId, req.TaskId, resp.Session.UserId, resp.Session.TaskId)
+		t.Errorf("Expected UserId %s and TaskId %s, got UserId %s and TaskId %s",
+			req.UserId, req.TaskId, resp.Session.UserId, resp.Session.TaskId)
 	}
 
-	// Check StartTime and EndTime
-	if resp.Session.StartTime.AsTime().After(resp.Session.EndTime.AsTime()) {
-		t.Errorf("StartTime must be before EndTime")
+	// StartTime must be set
+	if resp.Session.StartTime == nil {
+		t.Fatalf("StartTime is nil")
+	}
+
+	// EndTime is not part of CreateSessionRequest anymore; service may set it or leave nil.
+	// If present, it must be equal/after StartTime.
+	if resp.Session.EndTime != nil && resp.Session.StartTime.AsTime().After(resp.Session.EndTime.AsTime()) {
+		t.Errorf("StartTime must be before or equal to EndTime when EndTime is set")
+	}
+
+	// Progress should start at 0
+	if resp.Session.Progress != 0 {
+		t.Errorf("Expected initial progress 0, got %d", resp.Session.Progress)
 	}
 
 	// Check if session was inserted into the database
 	var count int
-	err = connections.PomodoroDB.QueryRow("SELECT COUNT(*) FROM pomodoro_sessions WHERE session_id = $1", resp.Session.SessionId).Scan(&count)
+	err = connections.PomodoroDB.QueryRow(
+		"SELECT COUNT(*) FROM pomodoro_sessions WHERE session_id = $1",
+		resp.Session.SessionId,
+	).Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to query session count: %v", err)
 	}
-
 	if count != 1 {
 		t.Errorf("Expected 1 session in the database, found %d", count)
 	}
@@ -174,15 +199,27 @@ func TestUpdateSessionResponse(t *testing.T) {
 	userId := uuid.NewString()
 	taskId := uuid.NewString()
 	sessionId := uuid.NewString()
-	startTime := time.Now()
-	endTime := startTime.Add(25 * time.Minute)
+	startTime := time.Now().Add(-25 * time.Minute)
+	endTime := time.Now()
 
 	// Seed a test session
 	SeedPomodoroSession(t, connections.PomodoroDB, sessionId, userId, taskId, startTime, endTime)
 
+	// Prepare update values
+	newProgress := int32(120)
+	newStatus := pb.SessionStatus_SESSION_STATUS_COMPLETED
+	newType := pb.SessionType_SESSION_TYPE_LONG_BREAK
+	newNumberInCycle := int32(2)
+	newLastUpdate := time.Now()
+
 	req := &pb.UpdateSessionRequest{
-		SessionId: sessionId,
-		Status:    pb.SessionStatus_COMPLETED,
+		SessionId:     sessionId,
+		Progress:      newProgress,
+		EndTime:       timestamppb.New(endTime),
+		Status:        newStatus,
+		SessionType:   newType,
+		NumberInCycle: newNumberInCycle,
+		LastUpdate:    timestamppb.New(newLastUpdate),
 	}
 
 	resp, err := service.UpdateSessionResponse(context.Background(), req)
@@ -193,21 +230,67 @@ func TestUpdateSessionResponse(t *testing.T) {
 	if resp.Session.SessionId != sessionId {
 		t.Errorf("Expected SessionId %s, got %s", sessionId, resp.Session.SessionId)
 	}
-
-	if resp.Session.Status != pb.SessionStatus_COMPLETED {
-		t.Errorf("Expected Status %s, got %s", pb.SessionStatus_COMPLETED, resp.Session.Status)
+	if resp.Session.Progress != newProgress {
+		t.Errorf("Expected Progress %d, got %d", newProgress, resp.Session.Progress)
+	}
+	if resp.Session.Status != newStatus {
+		t.Errorf("Expected Status %v, got %v", newStatus, resp.Session.Status)
+	}
+	if resp.Session.SessionType != newType {
+		t.Errorf("Expected SessionType %v, got %v", newType, resp.Session.SessionType)
+	}
+	if resp.Session.NumberInCycle != newNumberInCycle {
+		t.Errorf("Expected NumberInCycle %d, got %d", newNumberInCycle, resp.Session.NumberInCycle)
+	}
+	if resp.Session.EndTime == nil {
+		t.Fatalf("EndTime is nil in response")
+	}
+	et := resp.Session.EndTime.AsTime().UTC()
+	if et.Before(endTime.UTC().Add(-time.Second)) || et.After(endTime.UTC().Add(time.Second)) {
+		t.Errorf("Expected EndTime ~%v, got %v", endTime, resp.Session.EndTime.AsTime())
+	}
+	if resp.Session.LastUpdate == nil {
+		t.Fatalf("LastUpdate is nil in response")
 	}
 
 	// Check if the session was updated in the database
-	var statusStr string
-	err = connections.PomodoroDB.QueryRow("SELECT status FROM pomodoro_sessions WHERE session_id = $1", sessionId).Scan(&statusStr)
+	var (
+		gotProgress      int32
+		gotEndTime       time.Time
+		gotStatusStr     string
+		gotTypeStr       string
+		gotNumberInCycle int32
+		gotLastUpdate    time.Time
+	)
+	err = connections.PomodoroDB.QueryRow(`
+        SELECT progress, end_time, status, session_type, number_in_cycle, last_update
+        FROM pomodoro_sessions
+        WHERE session_id = $1`, sessionId).Scan(
+		&gotProgress, &gotEndTime, &gotStatusStr, &gotTypeStr, &gotNumberInCycle, &gotLastUpdate,
+	)
 	if err != nil {
-		t.Fatalf("Failed to query updated session status: %v", err)
+		t.Fatalf("Failed to query updated session: %v", err)
 	}
 
-	statusEnum := sessionStatusStringToEnumMap[statusStr]
-	if statusEnum != pb.SessionStatus_COMPLETED {
-		t.Errorf("Expected updated status %s, got %s", pb.SessionStatus_COMPLETED, statusEnum)
+	// DB stores status/session_type as strings using proto names (e.g., "SESSION_STATUS_COMPLETED")
+	expStatusStr := pb.SessionStatus_name[int32(newStatus)]
+	expTypeStr := pb.SessionType_name[int32(newType)]
+
+	if gotProgress != newProgress {
+		t.Errorf("DB progress mismatch: expected %d, got %d", newProgress, gotProgress)
+	}
+	if gotStatusStr != expStatusStr {
+		t.Errorf("DB status mismatch: expected %s, got %s", expStatusStr, gotStatusStr)
+	}
+	if gotTypeStr != expTypeStr {
+		t.Errorf("DB session_type mismatch: expected %s, got %s", expTypeStr, gotTypeStr)
+	}
+	if gotNumberInCycle != newNumberInCycle {
+		t.Errorf("DB number_in_cycle mismatch: expected %d, got %d", newNumberInCycle, gotNumberInCycle)
+	}
+	// Compare times in UTC with small tolerance
+	if gotEndTime.UTC().Before(endTime.UTC().Add(-time.Second)) || gotEndTime.UTC().After(endTime.UTC().Add(time.Second)) {
+		t.Errorf("DB end_time mismatch: expected ~%v, got %v", endTime, gotEndTime)
 	}
 
 	// Clean up test session

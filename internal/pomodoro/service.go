@@ -29,22 +29,6 @@ type Service struct {
 	db *database.Connections
 }
 
-var sessionStatusEnumToStringMap = map[int32]string{
-	0: "SESSION_STATUS_UNSPECIFIED",
-	1: "SESSION_STATUS_IDLE",
-	2: "SESSION_STATUS_IN_PROGRESS",
-	3: "SESSION_STATUS_PENDING",
-	4: "SESSION_STATUS_COMPLETED",
-}
-
-var sessionStatusStringToEnumMap = map[string]pb.SessionStatus{
-	"SESSION_STATUS_UNSPECIFIED": pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
-	"SESSION_STATUS_IDLE":        pb.SessionStatus_SESSION_STATUS_IDLE,
-	"SESSION_STATUS_IN_PROGRESS": pb.SessionStatus_SESSION_STATUS_IN_PROGRESS,
-	"SESSION_STATUS_PENDING":     pb.SessionStatus_SESSION_STATUS_PENDING,
-	"SESSION_STATUS_COMPLETED":   pb.SessionStatus_SESSION_STATUS_COMPLETED,
-}
-
 func NewService(db *database.Connections) *Service {
 	return &Service{db: db}
 }
@@ -69,16 +53,16 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 		StartTime:     req.StartTime,
 		Progress:      0,
 		EndTime:       timestamppb.New(req.StartTime.AsTime().Add(25 * time.Minute)),
-		Status:        pb.SessionStatus_SESSION_STATUS_UNSPECIFIED,
+		Status:        pb.SessionStatus_SESSION_STATUS_IDLE,
 		SessionType:   pb.SessionType_SESSION_TYPE_SHORT_BREAK,
 		NumberInCycle: 0,
 		LastUpdate:    timestamppb.Now(),
 	}
 
-	statusStr := sessionStatusEnumToStringMap[int32(newSession.Status)]
+	statusStr := pb.SessionStatus_name[int32(newSession.Status)]
 	sessionTypeStr := pb.SessionType_name[int32(newSession.SessionType)]
 
-	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO pomodoro_sessions (session_id, user_id, task_id, start_time, progress, end_time, status, session_type, number_in_cycle, last_update) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.Progress, newSession.EndTime.AsTime(), statusStr, sessionTypeStr, newSession.NumberInCycle, newSession.LastUpdate.AsTime())
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO sessions (session_id, user_id, task_id, start_time, progress, end_time, status, session_type, number_in_cycle, last_update) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.Progress, newSession.EndTime.AsTime(), statusStr, sessionTypeStr, newSession.NumberInCycle, newSession.LastUpdate.AsTime())
 	if err != nil {
 		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" { // Unique violation
 			return nil, status.Error(codes.AlreadyExists, "session already exists")
@@ -98,7 +82,7 @@ func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (
 	rows, err := s.db.PomodoroDB.QueryContext(ctx, `
         SELECT session_id, task_id, start_time, progress, end_time, status,
 		session_type, number_in_cycle, last_update
-        FROM pomodoro_sessions
+        FROM sessions
         WHERE user_id = $1`, req.UserId)
 	if err != nil {
 		log.Printf("Failed to query sessions: %v", err)
@@ -164,7 +148,7 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 		return nil, status.Error(codes.InvalidArgument, "invalid session type")
 	}
 
-	_, err := s.db.PomodoroDB.ExecContext(ctx, `UPDATE pomodoro_sessions SET
+	_, err := s.db.PomodoroDB.ExecContext(ctx, `UPDATE sessions SET
 		progress = $1,
 		end_time = $2,
 		status = $3,
@@ -182,7 +166,7 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 	var session pb.PomodoroSession
 	row := s.db.PomodoroDB.QueryRowContext(ctx, `SELECT session_id, user_id, task_id, start_time, progress, end_time, status,
 		session_type, number_in_cycle, last_update
-		FROM pomodoro_sessions WHERE session_id = $1`, req.SessionId)
+		FROM sessions WHERE session_id = $1`, req.SessionId)
 
 	var start, end, lastUpdate time.Time
 	if err := row.Scan(&session.SessionId, &session.UserId, &session.TaskId, &start, &session.Progress, &end, &statusStr, &sessionTypeStr, &session.NumberInCycle, &lastUpdate); err != nil {
@@ -218,7 +202,7 @@ func (s *Service) DeleteSession(ctx context.Context, req *pb.DeleteSessionReques
 		return nil, status.Error(codes.InvalidArgument, "session_id is required")
 	}
 
-	_, err := s.db.PomodoroDB.ExecContext(ctx, "DELETE FROM pomodoro_sessions WHERE session_id = $1", req.SessionId)
+	_, err := s.db.PomodoroDB.ExecContext(ctx, "DELETE FROM sessions WHERE session_id = $1", req.SessionId)
 	if err != nil {
 		log.Printf("Failed to delete session: %v", err)
 		return nil, status.Error(codes.Internal, "failed to delete session")
