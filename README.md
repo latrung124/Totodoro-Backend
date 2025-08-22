@@ -2,98 +2,140 @@
 
 Microservices Monolith for Totodoro-Backend.
 
-## Setup Instructions
+## Quick Start
 
-Follow these steps to set up the project on your local machine:
+- Windows
+  1. Open a terminal in the repo root.
+  2. Run setup (generates protobufs and builds):
+     ```bat
+     scripts\setup-windows.bat
+     ```
+  3. Run the server:
+     ```bat
+     bin\totodoro-backend.exe
+     ```
 
-### Prerequisites
+- Ubuntu
+  1. Make scripts executable:
+     ```bash
+     chmod +x scripts/setup-ubuntu.sh scripts/build-ubuntu.sh
+     ```
+  2. Run setup (downloads protoc, installs plugins, generates protobufs):
+     ```bash
+     ./scripts/setup-ubuntu.sh
+     ```
+  3. Build:
+     ```bash
+     ./scripts/build-ubuntu.sh
+     ```
+  4. Run the server:
+     ```bash
+     ./bin/totodoro-backend
+     ```
 
-Ensure you have the following installed on your system:
-- [Go](https://go.dev/dl/) (version 1.20 or later)
-- [Protocol Buffers Compiler (protoc)](https://github.com/protocolbuffers/protobuf/releases) (version 32.0-rc1 or later)
+## Prerequisites
+
+- Go 1.20+ (https://go.dev/dl/)
 - Git
-- A PostgreSQL database (or any database supported by the project)
 
-### Clone the Repository
+Platform-specific:
+- Windows: PowerShell available (default). The setup script downloads protoc automatically.
+- Ubuntu: curl or wget, unzip (the setup script installs unzip via apt if missing).
 
+Protocol Buffers:
+- Both setup scripts install protoc (v32.0-rc1) locally to third_party/protobuf and install Go plugins:
+  - google.golang.org/protobuf/cmd/protoc-gen-go
+  - google.golang.org/grpc/cmd/protoc-gen-go-grpc
+
+## Detailed Setup
+
+- Windows
+  - Run:
+    ```bat
+    scripts\setup-windows.bat
+    ```
+  - This will:
+    - Initialize go.mod if missing
+    - Download dependencies
+    - Download and extract protoc (if not present)
+    - Generate Go files from proto/*.proto into internal/proto_package/*
+    - Build bin\totodoro-backend.exe
+
+- Ubuntu
+  - Run:
+    ```bash
+    ./scripts/setup-ubuntu.sh
+    ```
+  - This will:
+    - Initialize go.mod if missing
+    - Ensure unzip is installed
+    - Download and extract protoc (if not present)
+    - Install protoc-gen-go and protoc-gen-go-grpc
+    - Generate Go files from proto/*.proto into internal/proto_package/*
+    - Tidy Go modules
+
+## Build Only
+
+- Windows
+  - If you already ran setup, the binary is built. To rebuild manually:
+    ```bat
+    go build -v -o bin\totodoro-backend.exe .
+    ```
+
+- Ubuntu
+  - Run:
+    ```bash
+    ./scripts/build-ubuntu.sh
+    ```
+  - Or manually:
+    ```bash
+    go build -v -o bin/totodoro-backend .
+    ```
+
+## Run
+
+- Windows:
+  ```bat
+  bin\totodoro-backend.exe
+  ```
+- Ubuntu:
+  ```bash
+  ./bin/totodoro-backend
+  ```
+
+## Generating Protobufs Manually
+
+Both setup scripts already generate protobufs. To regenerate manually:
+
+- Windows:
+  ```bat
+  scripts\setup-windows.bat
+  ```
+- Ubuntu:
+  ```bash
+  ./scripts/setup-ubuntu.sh
+  ```
+
+## Tests
+
+Run unit tests (both platforms):
 ```bash
-git clone https://github.com/latrung124/Totodoro-Backend.git
-cd Totodoro-Backend
+go test ./...
 ```
 
-Install Dependencies
-Run the following command to install Go dependencies:
+## Troubleshooting
 
-```bash
-go mod tidy
-```
-
-### Setting Up Protocol Buffers
-1. Download and Install protoc:
-- If protoc is not already installed, the setup script will download and extract it automatically.
-
-2. Install Go Plugins for protoc:
-- Run the following commands to install the required plugins:
-```bash
-go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-```
-- Ensure $GOBIN is in your system's PATH.
-
-3. Generate .pb.go Files:
-
-- Run the setup script to generate the .pb.go files:
-```bash
-./scripts/setup-windows.bat
-```
-
-### Database Configuration
-1. Create the required databases for the project (e.g., UserDB, PomodoroDB, etc.).
-2. Update the database connection strings in the environment variables or configuration files.
-
-### Build the Project
-Run the following command to build the project:
-```bash
-./scripts/build-windows.bat
-```
-
-### Run the Project
-After building, you can run the project using:
-
-```bash
-./bin/totodoro-backend.exe
-```
-
-### Running Unit Tests
-
-To ensure the project is functioning as expected, you can run the unit tests provided in the repository.
-
-1. **Set Up the Test Environment**:
-   - Ensure the `.env` file is properly configured for testing. Use environment variables like `TEST_USER_DB_URL` to point to a test database.
-
-2. **Run All Tests**:
-   - Use the following command to run all unit tests in the project:
-     ```bash
-     go test ./...
-     ```
-
-3. **Run a Specific Test**:
-   - To run a specific test, use the `-run` flag with the test name:
-     ```bash
-     go test -run TestCreateUser ./...
-     ```
-
-4. **Verbose Output**:
-   - Use the `-v` flag to see detailed output for each test:
-     ```bash
-     go test -v ./...
-     ```
-
-5. **Check Coverage**:
-   - To check test coverage, use the `-cover` flag:
-     ```bash
-     go test -cover ./...
-     ```
-
-6. **Debugging Tests**:
-   - Add `t.Log` or `log.Printf` statements in your test files to debug failing tests. Use the `-v` flag to see the logs.
+- go mod tidy errors like “no matching versions for query "latest"”:
+  - Ensure protobufs are generated first (run the setup script).
+- Missing protoc-gen-go or protoc-gen-go-grpc:
+  ```bash
+  go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+  go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+  ```
+  Ensure $(go env GOPATH)/bin is in PATH.
+- Ubuntu verbose logs:
+  ```bash
+  DEBUG=1 ./scripts/setup-ubuntu.sh
+  ```
+- Force re-download protoc:
+  - Delete third_party/protobuf and re-run setup.
