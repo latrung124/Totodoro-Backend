@@ -16,6 +16,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
+	"github.com/latrung124/Totodoro-Backend/internal/helper"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -29,90 +30,6 @@ type Service struct {
 
 func NewService(db *database.Connections) *Service {
 	return &Service{db: db}
-}
-
-func toDBTaskGroupPriority(p pb.TaskGroupPriority) string {
-	switch p {
-	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_LOW:
-		return "low"
-	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_MEDIUM:
-		return "medium"
-	case pb.TaskGroupPriority_TASK_GROUP_PRIORITY_HIGH:
-		return "high"
-	default:
-		return "medium"
-	}
-}
-
-func toDBTaskGroupStatus(s pb.TaskGroupStatus) string {
-	switch s {
-	case pb.TaskGroupStatus_TASK_GROUP_STATUS_IDLE:
-		return "idle"
-	case pb.TaskGroupStatus_TASK_GROUP_STATUS_COMPLETED:
-		return "completed"
-	case pb.TaskGroupStatus_TASK_GROUP_STATUS_PENDING:
-		return "pending"
-	case pb.TaskGroupStatus_TASK_GROUP_STATUS_IN_PROGRESS:
-		return "in progress"
-	default:
-		return "idle"
-	}
-}
-
-func toDBTaskPriority(p pb.TaskPriority) string {
-	switch p {
-	case pb.TaskPriority_TASK_PRIORITY_LOW:
-		return "low"
-	case pb.TaskPriority_TASK_PRIORITY_MEDIUM:
-		return "medium"
-	case pb.TaskPriority_TASK_PRIORITY_HIGH:
-		return "high"
-	default:
-		return "medium"
-	}
-}
-
-func toDBTaskStatus(s pb.TaskStatus) string {
-	switch s {
-	case pb.TaskStatus_TASK_STATUS_IDLE:
-		return "idle"
-	case pb.TaskStatus_TASK_STATUS_COMPLETED:
-		return "completed"
-	case pb.TaskStatus_TASK_STATUS_PENDING:
-		return "pending"
-	case pb.TaskStatus_TASK_STATUS_IN_PROGRESS:
-		return "in progress"
-	default:
-		return "idle"
-	}
-}
-
-func toDBTaskPriorityEnum(p string) pb.TaskPriority {
-	switch p {
-	case "low":
-		return pb.TaskPriority_TASK_PRIORITY_LOW
-	case "medium":
-		return pb.TaskPriority_TASK_PRIORITY_MEDIUM
-	case "high":
-		return pb.TaskPriority_TASK_PRIORITY_HIGH
-	default:
-		return pb.TaskPriority_TASK_PRIORITY_MEDIUM // Default to medium if unknown
-	}
-}
-
-func toDBTaskStatusEnum(s string) pb.TaskStatus {
-	switch s {
-	case "idle":
-		return pb.TaskStatus_TASK_STATUS_IDLE
-	case "completed":
-		return pb.TaskStatus_TASK_STATUS_COMPLETED
-	case "pending":
-		return pb.TaskStatus_TASK_STATUS_PENDING
-	case "in progress":
-		return pb.TaskStatus_TASK_STATUS_IN_PROGRESS
-	default:
-		return pb.TaskStatus_TASK_STATUS_IDLE // Default to idle if unknown
-	}
 }
 
 // CreateTask creates a new task for a user.
@@ -159,8 +76,8 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 		UpdatedAt:          timestamppb.New(now),
 	}
 
-	priorityLabel := toDBTaskPriority(req.Priority)
-	statusLabel := toDBTaskStatus(req.Status)
+	priorityLabel := helper.TaskPriorityDbEnumToString(req.Priority)
+	statusLabel := helper.TaskStatusDbEnumToString(req.Status)
 
 	_, err := s.db.TaskDB.ExecContext(
 		ctx,
@@ -243,8 +160,8 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 		}
 
 		task.UserId = req.UserId
-		task.Priority = toDBTaskPriorityEnum(priorityLabel)
-		task.Status = toDBTaskStatusEnum(statusLabel)
+		task.Priority = helper.TaskPriorityDbStringToEnum(priorityLabel)
+		task.Status = helper.TaskStatusDbStringToEnum(statusLabel)
 		task.TotalPomodoros = totalPomodoros
 		task.CompletedPomodoros = completedPomodoros
 		task.Progress = progress
@@ -298,8 +215,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
     `,
 		req.Name,
 		req.Description,
-		toDBTaskPriority(req.Priority),
-		toDBTaskStatus(req.Status),
+		helper.TaskPriorityDbEnumToString(req.Priority),
+		helper.TaskStatusDbEnumToString(req.Status),
 		req.TotalPomodoros,
 		req.CompletedPomodoros,
 		req.Progress,
@@ -354,8 +271,8 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		return nil, status.Error(codes.Internal, "failed to fetch updated task")
 	}
 
-	task.Priority = toDBTaskPriorityEnum(priorityLabel)
-	task.Status = toDBTaskStatusEnum(statusLabel)
+	task.Priority = helper.TaskPriorityDbStringToEnum(priorityLabel)
+	task.Status = helper.TaskStatusDbStringToEnum(statusLabel)
 	task.TotalPomodoros = totalPomodoros
 	task.CompletedPomodoros = completedPomodoros
 	task.Progress = progress
@@ -388,8 +305,8 @@ func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRe
 		deadlineVal = nil
 	}
 
-	priorityLabel := toDBTaskGroupPriority(req.Priority)
-	statusLabel := toDBTaskGroupStatus(req.Status)
+	priorityLabel := helper.TaskGroupPriorityDbEnumToString(req.Priority)
+	statusLabel := helper.TaskGroupStatusDbEnumToString(req.Status)
 
 	newGroup := &pb.TaskGroup{
 		GroupId:        groupID,

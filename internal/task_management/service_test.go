@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
+	"github.com/latrung124/Totodoro-Backend/internal/helper"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -187,12 +188,12 @@ func TestCreateTaskGroup(t *testing.T) {
 			name, description, icon, gotName, gotDescription, gotIcon)
 	}
 
-	priorityLabel := toDBTaskGroupPriority(priority)
+	priorityLabel := helper.TaskGroupPriorityDbEnumToString(priority)
 	if gotPriority != string(priorityLabel) {
 		t.Errorf("Persisted priority expected %s, got %s", string(priorityLabel), gotPriority)
 	}
 
-	statusLabel := toDBTaskGroupStatus(status)
+	statusLabel := helper.TaskGroupStatusDbEnumToString(status)
 	if gotStatus != string(statusLabel) {
 		t.Errorf("Persisted status expected %s, got %s", string(statusLabel), gotStatus)
 	}
@@ -313,8 +314,8 @@ func seedTask(
 		groupId,
 		name,
 		description,
-		string(toDBTaskPriority(priority)),
-		string(toDBTaskStatus(status)),
+		string(helper.TaskPriorityDbEnumToString(priority)),
+		string(helper.TaskStatusDbEnumToString(status)),
 		totalPomodoros,
 		completedPomodoros,
 		progress,
