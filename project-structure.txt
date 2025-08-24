@@ -1,54 +1,62 @@
 project-root/
 ├── main.go                  # Entry point for the monolithic API
 ├── internal/
-│   ├── user/                # User service logic
-│   │   ├── handler.go       # HTTP handlers (API endpoints)
-│   │   ├── service.go       # Business logic
-│   │   ├── repository.go    # Data access layer
-│   │   └── model.go         # Domain models (e.g., User struct)
-│   ├── pomodoro/            # Pomodoro service logic
+│   ├── api_gateway/                            # User service logic
+│   │   ├── gateway.go                          # HTTP handlers (API endpoints)
+│   │   └── handler/                            # HTTP handlers (API endpoints)
+│   │       ├── user_handler.go                 # HTTP handlers (API endpoints)
+│   │       ├── pomodoro_handler.go             # Business logic
+│   │       ├── task_management_handler.go      # Data access layer
+│   │       ├── statistic_handler.go            # Data access layer
+│   │       └── notification_handler.go         # Domain models (e.g., User struct)
+│   ├── user/                                   # User service logic
+│   │   ├── handler.go                          # HTTP handlers (API endpoints)
+│   │   ├── service.go                          # Business logic
+│   │   ├── repository.go                       # Data access layer
+│   │   └── model.go                            # Domain models (e.g., User struct)
+│   ├── pomodoro/                               # Pomodoro service logic
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   ├── repository.go
 │   │   └── model.go
-│   ├── statistic/           # Statistic service logic
+│   ├── statistic/                              # Statistic service logic
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   ├── repository.go
 │   │   └── model.go
-│   ├── notification/        # Notification service logic
+│   ├── notification/                           # Notification service logic
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   ├── repository.go
 │   │   └── model.go
-│   ├── task/                # Task management service logic
+│   ├── task/                                   # Task management service logic
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   ├── repository.go
 │   │   └── model.go
-│   ├── config/              # Configuration management
+│   ├── config/                                 # Configuration management
 │   │   └── config.go
-│   ├── database/            # Shared database connection
+│   ├── database/                               # Shared database connection
 │   │   └── db.go
-│   ├── middleware/          # Shared middleware (e.g., auth, logging)
+│   ├── middleware/                             # Shared middleware (e.g., auth, logging)
 │   |    └── middleware.go
-|   └── proto_package/       # Protobuf generated files
+|   └── proto_package/                          # Protobuf generated files
 │       └── pb.go            
-├── server/                  # Server setup and initialization   
+├── server/                                     # Server setup and initialization   
 │       └── server.go            
 ├── pkg/                     
 │   └── logger/
 │       └── logger.go
-├── scripts/                 # Build and utility scripts
-│   ├── setup-windows.bat    # Windows setup script (as provided earlier)
-│   └── build-windows.bat    # Windows build script (as provided earlier)
+├── scripts/                                    # Build and utility scripts
+│   ├── setup-windows.bat                       # Windows setup script (as provided earlier)
+│   └── build-windows.bat                       # Windows build script (as provided earlier)
 ├── proto/
-│   └── user_service.proto   # gRPC service definition for user service
-├── third_party/             # Third-party dependencies
+│   └── user_service.proto                      # gRPC service definition for user service
+├── third_party/                                # Third-party dependencies
 │   └── protobuf/
 │       ├── bin/
 │       └── include/
-├── go.mod                   # Go module file
-├── go.sum                   # Go module checksums
-├── README.md                # Project documentation
-└── .env                     # Environment variables
+├── go.mod                                      # Go module file
+├── go.sum                                      # Go module checksums
+├── README.md                                   # Project documentation
+└── .env                                        # Environment variables
