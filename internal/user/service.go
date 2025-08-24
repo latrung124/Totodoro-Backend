@@ -156,3 +156,174 @@ func (s *Service) UpdateUser(ctx context.Context, req *pb.UpdateUserRequest) (*p
 
 	return &pb.UpdateUserResponse{User: &existingUser}, nil
 }
+
+func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (*pb.GetSettingsResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	var (
+		userID                 string
+		pomodoroDuration       int32
+		shortBreakDuration     int32
+		longBreakDuration      int32
+		autoStartShortBreak    bool
+		autoStartLongBreak     bool
+		autoStartPomodoro      bool
+		pomodoroInterval       int32
+		theme                  string
+		shortBreakNotification bool
+		longBreakNotification  bool
+		pomodoroNotification   bool
+		autoStartMusic         bool
+		language               string
+	)
+
+	err := s.db.UserDB.QueryRowContext(ctx, `
+        SELECT user_id,
+               pomodoro_duration, short_break_duration, long_break_duration,
+               auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+               pomodoro_interval, theme,
+               short_break_notification, long_break_notification, pomodoro_notification,
+               auto_start_music, language
+        FROM settings
+        WHERE user_id = $1
+    `, req.UserId).Scan(
+		&userID,
+		&pomodoroDuration, &shortBreakDuration, &longBreakDuration,
+		&autoStartShortBreak, &autoStartLongBreak, &autoStartPomodoro,
+		&pomodoroInterval, &theme,
+		&shortBreakNotification, &longBreakNotification, &pomodoroNotification,
+		&autoStartMusic, &language,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Error(codes.NotFound, "settings not found")
+		}
+		log.Printf("Failed to get settings: %v", err)
+		return nil, status.Error(codes.Internal, "failed to get settings")
+	}
+
+	settings := &pb.Settings{
+		UserId:                 userID,
+		PomodoroDuration:       pomodoroDuration,
+		ShortBreakDuration:     shortBreakDuration,
+		LongBreakDuration:      longBreakDuration,
+		AutoStartShortBreak:    autoStartShortBreak,
+		AutoStartLongBreak:     autoStartLongBreak,
+		AutoStartPomodoro:      autoStartPomodoro,
+		PomodoroInterval:       pomodoroInterval,
+		Theme:                  theme,
+		ShortBreakNotification: shortBreakNotification,
+		LongBreakNotification:  longBreakNotification,
+		PomodoroNotification:   pomodoroNotification,
+		AutoStartMusic:         autoStartMusic,
+		Language:               language,
+	}
+
+	return &pb.GetSettingsResponse{Settings: settings}, nil
+}
+
+func (s *Service) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequest) (*pb.UpdateSettingsResponse, error) {
+	if req.UserId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	_, err := s.db.UserDB.ExecContext(ctx, `
+        INSERT INTO settings (
+            user_id,
+            pomodoro_duration, short_break_duration, long_break_duration,
+            auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+            pomodoro_interval, theme,
+            short_break_notification, long_break_notification, pomodoro_notification,
+            auto_start_music, language
+        ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+        )
+        ON CONFLICT (user_id) DO UPDATE SET
+            pomodoro_duration       = EXCLUDED.pomodoro_duration,
+            short_break_duration    = EXCLUDED.short_break_duration,
+            long_break_duration     = EXCLUDED.long_break_duration,
+            auto_start_short_break  = EXCLUDED.auto_start_short_break,
+            auto_start_long_break   = EXCLUDED.auto_start_long_break,
+            auto_start_pomodoro     = EXCLUDED.auto_start_pomodoro,
+            pomodoro_interval       = EXCLUDED.pomodoro_interval,
+            theme                   = EXCLUDED.theme,
+            short_break_notification= EXCLUDED.short_break_notification,
+            long_break_notification = EXCLUDED.long_break_notification,
+            pomodoro_notification   = EXCLUDED.pomodoro_notification,
+            auto_start_music        = EXCLUDED.auto_start_music,
+            language                = EXCLUDED.language
+    `,
+		req.UserId,
+		req.PomodoroDuration, req.ShortBreakDuration, req.LongBreakDuration,
+		req.AutoStartShortBreak, req.AutoStartLongBreak, req.AutoStartPomodoro,
+		req.PomodoroInterval, req.Theme,
+		req.ShortBreakNotification, req.LongBreakNotification, req.PomodoroNotification,
+		req.AutoStartMusic, req.Language,
+	)
+	if err != nil {
+		log.Printf("Failed to upsert settings: %v", err)
+		return nil, status.Error(codes.Internal, "failed to update settings")
+	}
+
+	var (
+		userID                 string
+		pomodoroDuration       int32
+		shortBreakDuration     int32
+		longBreakDuration      int32
+		autoStartShortBreak    bool
+		autoStartLongBreak     bool
+		autoStartPomodoro      bool
+		pomodoroInterval       int32
+		theme                  string
+		shortBreakNotification bool
+		longBreakNotification  bool
+		pomodoroNotification   bool
+		autoStartMusic         bool
+		language               string
+	)
+	err = s.db.UserDB.QueryRowContext(ctx, `
+        SELECT user_id,
+               pomodoro_duration, short_break_duration, long_break_duration,
+               auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+               pomodoro_interval, theme,
+               short_break_notification, long_break_notification, pomodoro_notification,
+               auto_start_music, language
+        FROM settings
+        WHERE user_id = $1
+    `, req.UserId).Scan(
+		&userID,
+		&pomodoroDuration, &shortBreakDuration, &longBreakDuration,
+		&autoStartShortBreak, &autoStartLongBreak, &autoStartPomodoro,
+		&pomodoroInterval, &theme,
+		&shortBreakNotification, &longBreakNotification, &pomodoroNotification,
+		&autoStartMusic, &language,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Error(codes.NotFound, "settings not found")
+		}
+		log.Printf("Failed to fetch updated settings: %v", err)
+		return nil, status.Error(codes.Internal, "failed to fetch updated settings")
+	}
+
+	settings := &pb.Settings{
+		UserId:                 userID,
+		PomodoroDuration:       pomodoroDuration,
+		ShortBreakDuration:     shortBreakDuration,
+		LongBreakDuration:      longBreakDuration,
+		AutoStartShortBreak:    autoStartShortBreak,
+		AutoStartLongBreak:     autoStartLongBreak,
+		AutoStartPomodoro:      autoStartPomodoro,
+		PomodoroInterval:       pomodoroInterval,
+		Theme:                  theme,
+		ShortBreakNotification: shortBreakNotification,
+		LongBreakNotification:  longBreakNotification,
+		PomodoroNotification:   pomodoroNotification,
+		AutoStartMusic:         autoStartMusic,
+		Language:               language,
+	}
+
+	return &pb.UpdateSettingsResponse{Settings: settings}, nil
+}

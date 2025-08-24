@@ -15,6 +15,23 @@ message User {
   google.protobuf.Timestamp updated_at = 5; // Last profile update, default NOW()
 }
 
+message Settings {
+  string user_id = 1;              // FK to User.user_id
+  int32 pomodoro_duration = 2;     // Duration of a pomodoro session in minutes
+  int32 short_break_duration = 3;  // Duration of a short break in minutes
+  int32 long_break_duration = 4;   // Duration of a long break in minutes
+  bool auto_start_short_break = 5; // Auto-start short break after pomodoro
+  bool auto_start_long_break = 6;  // Auto-start long break after pomodoro
+  bool auto_start_pomodoro = 7;    // Auto-start pomodoro after break
+  int32 pomodoro_interval = 8;    // Number of pomodoros before a long break
+  string theme = 9;               // UI theme preference (e.g., "light", "dark")
+  bool short_break_notification = 10; // Notify when short break ends
+  bool long_break_notification = 11;  // Notify when long break ends
+  bool pomodoro_notification = 12;    // Notify when pomodoro ends
+  bool auto_start_music = 13;         // Auto-start background music
+  string language = 14;               // Preferred language (e.g., "en", "es")
+}
+
 // Request message for fetching a user profile.
 message GetUserRequest {
   string user_id = 1;
@@ -48,6 +65,35 @@ message UpdateUserResponse {
   User user = 1;
 }
 
+message GetSettingsRequest {
+  string user_id = 1;
+}
+
+message GetSettingsResponse {
+  Settings settings = 1;
+}
+
+message UpdateSettingsRequest {
+  string user_id = 1;
+  int32 pomodoro_duration = 2;     // Duration of a pomodoro session in minutes
+  int32 short_break_duration = 3;  // Duration of a short break in minutes
+  int32 long_break_duration = 4;   // Duration of a long break in minutes
+  bool auto_start_short_break = 5; // Auto-start short break after pomodoro
+  bool auto_start_long_break = 6;  // Auto-start long break after pomodoro
+  bool auto_start_pomodoro = 7;    // Auto-start pomodoro after break
+  int32 pomodoro_interval = 8;    // Number of pomodoros before a long break
+  string theme = 9;               // UI theme preference (e.g., "light", "dark")
+  bool short_break_notification = 10; // Notify when short break ends
+  bool long_break_notification = 11;  // Notify when long break ends
+  bool pomodoro_notification = 12;    // Notify when pomodoro ends
+  bool auto_start_music = 13;         // Auto-start background music
+  string language = 14;               // Preferred language (e.g., "en", "es")
+}
+
+message UpdateSettingsResponse {
+  Settings settings = 1;
+}
+
 // UserService defines the operations available for user management.
 service UserService {
   // Retrieve a user by user_id.
@@ -58,4 +104,10 @@ service UserService {
 
   // Update an existing user's profile.
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+
+  // Retrieve user settings.
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+
+  // Update user settings.
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
 }
