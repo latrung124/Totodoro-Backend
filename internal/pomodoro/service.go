@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
+	"github.com/latrung124/Totodoro-Backend/internal/helper"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
@@ -59,8 +60,8 @@ func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionReques
 		LastUpdate:    timestamppb.Now(),
 	}
 
-	statusStr := pb.SessionStatus_name[int32(newSession.Status)]
-	sessionTypeStr := pb.SessionType_name[int32(newSession.SessionType)]
+	statusStr := helper.SessionStatusDbEnumToString(newSession.Status)
+	sessionTypeStr := helper.SessionTypeDbEnumToString(newSession.SessionType)
 
 	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO sessions (session_id, user_id, task_id, start_time, progress, end_time, status, session_type, number_in_cycle, last_update) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.Progress, newSession.EndTime.AsTime(), statusStr, sessionTypeStr, newSession.NumberInCycle, newSession.LastUpdate.AsTime())
 	if err != nil {
@@ -99,25 +100,33 @@ func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (
 			statusStr      string
 			sessionTypeStr string
 			lastUpdate     time.Time
+			progress       int32
+			numberInCycle  int32
 		)
-		if err := rows.Scan(&session.SessionId, &session.UserId, &session.TaskId, &start, &session.Progress, &end, &statusStr, &sessionTypeStr, &lastUpdate); err != nil {
+		if err := rows.Scan(
+			&session.SessionId,
+			&session.TaskId,
+			&start,
+			&progress,
+			&end,
+			&statusStr,
+			&sessionTypeStr,
+			&numberInCycle,
+			&lastUpdate); err != nil {
 			log.Printf("Failed to scan session: %v", err)
 			return nil, status.Error(codes.Internal, "failed to retrieve sessions")
 		}
+		session.UserId = req.UserId
 		session.StartTime = timestamppb.New(start)
 		session.EndTime = timestamppb.New(end)
-		if v, ok := pb.SessionStatus_value[statusStr]; ok {
-			session.Status = pb.SessionStatus(v)
-		} else {
-			session.Status = pb.SessionStatus_SESSION_STATUS_UNSPECIFIED
-		}
+		session.Progress = progress
 
-		if v, ok := pb.SessionType_value[sessionTypeStr]; ok {
-			session.SessionType = pb.SessionType(v)
-		} else {
-			session.SessionType = pb.SessionType_SESSION_TYPE_UNSPECIFIED
-		}
+		session.Status = helper.SessionStatusDbStringToEnum(statusStr)
+		session.SessionType = helper.SessionTypeDbStringToEnum(sessionTypeStr)
+
+		session.NumberInCycle = numberInCycle
 		session.LastUpdate = timestamppb.New(lastUpdate)
+
 		sessions = append(sessions, &session)
 	}
 
@@ -129,7 +138,7 @@ func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (
 	return &pb.GetSessionsResponse{Sessions: sessions}, nil
 }
 
-func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {
+func (s *Service) UpdateSession(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {
 	if req.SessionId == "" {
 		return nil, status.Error(codes.InvalidArgument, "session_id is required")
 	}
@@ -138,15 +147,8 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 		return nil, status.Error(codes.InvalidArgument, "status is required")
 	}
 
-	statusStr, ok := pb.SessionStatus_name[int32(req.Status)]
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid status")
-	}
-
-	sessionTypeStr, ok := pb.SessionType_name[int32(req.SessionType)]
-	if !ok {
-		return nil, status.Error(codes.InvalidArgument, "invalid session type")
-	}
+	statusStr := helper.SessionStatusDbEnumToString(req.Status)
+	sessionTypeStr := helper.SessionTypeDbEnumToString(req.SessionType)
 
 	_, err := s.db.PomodoroDB.ExecContext(ctx, `UPDATE sessions SET
 		progress = $1,
@@ -155,7 +157,7 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 		session_type = $4,
 		number_in_cycle = $5,
 		last_update = $6
-		WHERE session_id = $7`, req.Progress, req.EndTime, statusStr, sessionTypeStr, req.NumberInCycle, req.LastUpdate, req.SessionId)
+		WHERE session_id = $7`, req.Progress, req.EndTime.AsTime(), statusStr, sessionTypeStr, req.NumberInCycle, req.LastUpdate.AsTime(), req.SessionId)
 
 	if err != nil {
 		log.Printf("Failed to update session: %v", err)
@@ -179,16 +181,9 @@ func (s *Service) UpdateSessionResponse(ctx context.Context, req *pb.UpdateSessi
 
 	session.StartTime = timestamppb.New(start)
 	session.EndTime = timestamppb.New(end)
-	if v, ok := pb.SessionStatus_value[statusStr]; ok {
-		session.Status = pb.SessionStatus(v)
-	} else {
-		session.Status = pb.SessionStatus_SESSION_STATUS_IDLE
-	}
-	if v, ok := pb.SessionType_value[sessionTypeStr]; ok {
-		session.SessionType = pb.SessionType(v)
-	} else {
-		session.SessionType = pb.SessionType_SESSION_TYPE_SHORT_BREAK
-	}
+	session.Status = helper.SessionStatusDbStringToEnum(statusStr)
+	session.SessionType = helper.SessionTypeDbStringToEnum(sessionTypeStr)
+
 	session.LastUpdate = timestamppb.New(lastUpdate)
 
 	// Return the updated session

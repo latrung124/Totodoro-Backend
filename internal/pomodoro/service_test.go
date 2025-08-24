@@ -17,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
+	"github.com/latrung124/Totodoro-Backend/internal/helper"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -45,8 +46,8 @@ func setupTestDB() (*database.Connections, error) {
 
 func SeedPomodoroSession(t *testing.T, db *sql.DB, sessionId string, userId string, taskId string, startTime time.Time, endTime time.Time) {
 	progress := 0
-	statusStr := pb.SessionStatus_name[int32(pb.SessionStatus_SESSION_STATUS_IDLE)]
-	sessionTypeStr := pb.SessionType_name[int32(pb.SessionType_SESSION_TYPE_SHORT_BREAK)]
+	statusStr := helper.SessionStatusDbEnumToString(pb.SessionStatus_SESSION_STATUS_IDLE)
+	sessionTypeStr := helper.SessionTypeDbEnumToString(pb.SessionType_SESSION_TYPE_SHORT_BREAK)
 	numberInCycle := 0
 	lastUpdate := time.Now()
 
@@ -129,7 +130,7 @@ func TestCreateSession(t *testing.T) {
 	// Check if session was inserted into the database
 	var count int
 	err = connections.PomodoroDB.QueryRow(
-		"SELECT COUNT(*) FROM pomodoro_sessions WHERE session_id = $1",
+		"SELECT COUNT(*) FROM sessions WHERE session_id = $1",
 		resp.Session.SessionId,
 	).Scan(&count)
 	if err != nil {
@@ -222,7 +223,7 @@ func TestUpdateSessionResponse(t *testing.T) {
 		LastUpdate:    timestamppb.New(newLastUpdate),
 	}
 
-	resp, err := service.UpdateSessionResponse(context.Background(), req)
+	resp, err := service.UpdateSession(context.Background(), req)
 	if err != nil {
 		t.Fatalf("UpdateSessionResponse failed: %v", err)
 	}
@@ -264,7 +265,7 @@ func TestUpdateSessionResponse(t *testing.T) {
 	)
 	err = connections.PomodoroDB.QueryRow(`
         SELECT progress, end_time, status, session_type, number_in_cycle, last_update
-        FROM pomodoro_sessions
+        FROM sessions
         WHERE session_id = $1`, sessionId).Scan(
 		&gotProgress, &gotEndTime, &gotStatusStr, &gotTypeStr, &gotNumberInCycle, &gotLastUpdate,
 	)
@@ -273,8 +274,8 @@ func TestUpdateSessionResponse(t *testing.T) {
 	}
 
 	// DB stores status/session_type as strings using proto names (e.g., "SESSION_STATUS_COMPLETED")
-	expStatusStr := pb.SessionStatus_name[int32(newStatus)]
-	expTypeStr := pb.SessionType_name[int32(newType)]
+	expStatusStr := helper.SessionStatusDbEnumToString(newStatus)
+	expTypeStr := helper.SessionTypeDbEnumToString(newType)
 
 	if gotProgress != newProgress {
 		t.Errorf("DB progress mismatch: expected %d, got %d", newProgress, gotProgress)
@@ -330,7 +331,7 @@ func TestDeleteSession(t *testing.T) {
 
 	// Check if the session was deleted from the database
 	var count int
-	err = connections.PomodoroDB.QueryRow("SELECT COUNT(*) FROM pomodoro_sessions WHERE session_id = $1", sessionId).Scan(&count)
+	err = connections.PomodoroDB.QueryRow("SELECT COUNT(*) FROM sessions WHERE session_id = $1", sessionId).Scan(&count)
 	if err != nil {
 		t.Fatalf("Failed to query deleted session count: %v", err)
 	}
