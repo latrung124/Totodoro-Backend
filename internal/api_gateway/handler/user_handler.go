@@ -46,9 +46,14 @@ func NewUserHandler(client userpb.UserServiceClient) *UserHandler {
 //	GET    /api/users/{userId}/settings
 //	PUT    /api/users/{userId}/settings
 func RegisterUserRoutes(mux *http.ServeMux, h *UserHandler) {
-	mux.HandleFunc("/api/users/", h.usersWithID)     // GET/PUT /api/users/{id}
-	mux.HandleFunc("/api/users", h.usersRoot)        // POST /api/users
-	mux.HandleFunc("/api/users/", h.userSettingsMux) // GET/PUT /api/users/{id}/settings (handled in usersWithID for simplicity)
+	// Unversioned
+	mux.HandleFunc("/api/users/", h.usersWithID) // GET/PUT /api/users/{id} and /api/users/{id}/settings
+	mux.HandleFunc("/api/users", h.usersRoot)    // POST /api/users
+
+	// Versioned (v1)
+	mux.HandleFunc("/api/v1/users/", h.usersWithID) // GET/PUT /api/v1/users/{id} and /api/v1/users/{id}/settings
+	mux.HandleFunc("/api/v1/users", h.usersRoot)    // POST /api/v1/users
+
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
@@ -65,8 +70,19 @@ func (handler *UserHandler) usersRoot(writer http.ResponseWriter, request *http.
 }
 
 func (h *UserHandler) usersWithID(w http.ResponseWriter, r *http.Request) {
-	// Expect /api/users/{id} or /api/users/{id}/settings
-	trim := strings.TrimPrefix(r.URL.Path, "/api/users/")
+	// Support both /api/users/... and /api/v1/users/...
+	path := r.URL.Path
+	var trim string
+	switch {
+	case strings.HasPrefix(path, "/api/v1/users/"):
+		trim = strings.TrimPrefix(path, "/api/v1/users/")
+	case strings.HasPrefix(path, "/api/users/"):
+		trim = strings.TrimPrefix(path, "/api/users/")
+	default:
+		http.NotFound(w, r)
+		return
+	}
+
 	parts := strings.Split(trim, "/")
 	if len(parts) == 0 || parts[0] == "" {
 		http.NotFound(w, r)
@@ -97,11 +113,6 @@ func (h *UserHandler) usersWithID(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.NotFound(w, r)
 	}
-}
-
-func (h *UserHandler) userSettingsMux(w http.ResponseWriter, r *http.Request) {
-	// Kept for compatibility; logic handled in usersWithID
-	http.NotFound(w, r)
 }
 
 type ctxUserIDKey struct{}

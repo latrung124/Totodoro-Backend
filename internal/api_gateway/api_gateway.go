@@ -9,6 +9,7 @@ package api_gateway
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -37,6 +38,7 @@ type Options struct {
 
 func New(ctx context.Context, opt Options) (*Gateway, error) {
 	// Create gRPC client connection (non-blocking; recommended)
+	log.Printf("[ApiGateway] Connecting to UserService at %s", opt.UserServiceAddr)
 	userConn, err := grpc.NewClient(
 		opt.UserServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -66,18 +68,23 @@ func New(ctx context.Context, opt Options) (*Gateway, error) {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	log.Printf("[ApiGateway] Listening on %s", opt.HTTPAddr)
+
 	return gw, nil
 }
 
 func (g *Gateway) ListenAndServe() error {
+	log.Printf("[gateway] starting http server on %s", g.Server.Addr)
 	return g.Server.ListenAndServe()
 }
 
 func (g *Gateway) Shutdown(ctx context.Context) error {
+	log.Printf("[gateway] shutting down http server")
 	if g.Server != nil {
 		_ = g.Server.Shutdown(ctx)
 	}
 	if g.UserConn != nil {
+		log.Printf("[gateway] closing user gRPC connection")
 		_ = g.UserConn.Close()
 	}
 	return nil
