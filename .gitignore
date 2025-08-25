@@ -11,3 +11,4 @@ third_party/
 
 # Generated files
 proto_package/
+openapi/
