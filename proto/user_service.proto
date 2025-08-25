@@ -5,62 +5,58 @@ package user_service;
 option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
-// Represents a user in the system.
+// ===== ENTITIES =====
 message User {
-  string user_id = 1;              // Unique user ID (UUID)
-  string email = 2;                // Email for authentication (nullable)
-  string username = 3;             // Display name (required)
-  google.protobuf.Timestamp created_at = 4; // Account creation date, default NOW()
-  google.protobuf.Timestamp updated_at = 5; // Last profile update, default NOW()
+  string user_id = 1;
+  string email = 2;
+  string username = 3;
+  google.protobuf.Timestamp created_at = 4;
+  google.protobuf.Timestamp updated_at = 5;
 }
 
 message Settings {
-  string user_id = 1;              // FK to User.user_id
-  int32 pomodoro_duration = 2;     // Duration of a pomodoro session in minutes
-  int32 short_break_duration = 3;  // Duration of a short break in minutes
-  int32 long_break_duration = 4;   // Duration of a long break in minutes
-  bool auto_start_short_break = 5; // Auto-start short break after pomodoro
-  bool auto_start_long_break = 6;  // Auto-start long break after pomodoro
-  bool auto_start_pomodoro = 7;    // Auto-start pomodoro after break
-  int32 pomodoro_interval = 8;    // Number of pomodoros before a long break
-  string theme = 9;               // UI theme preference (e.g., "light", "dark")
-  bool short_break_notification = 10; // Notify when short break ends
-  bool long_break_notification = 11;  // Notify when long break ends
-  bool pomodoro_notification = 12;    // Notify when pomodoro ends
-  bool auto_start_music = 13;         // Auto-start background music
-  string language = 14;               // Preferred language (e.g., "en", "es")
+  string user_id = 1;
+  int32 pomodoro_duration = 2;
+  int32 short_break_duration = 3;
+  int32 long_break_duration = 4;
+  bool auto_start_short_break = 5;
+  bool auto_start_long_break = 6;
+  bool auto_start_pomodoro = 7;
+  int32 pomodoro_interval = 8;
+  string theme = 9;
+  bool short_break_notification = 10;
+  bool long_break_notification = 11;
+  bool pomodoro_notification = 12;
+  bool auto_start_music = 13;
+  string language = 14;
 }
 
-// Request message for fetching a user profile.
+// ===== REQUESTS/RESPONSES =====
 message GetUserRequest {
   string user_id = 1;
 }
 
-// Response message containing a user profile.
 message GetUserResponse {
   User user = 1;
 }
 
-// Request message for creating a new user.
 message CreateUserRequest {
-  string email = 1;    // Email can be used for OAuth/Firebase authentication.
-  string username = 2; // Must be unique and not null.
+  string email = 1;
+  string username = 2;
 }
 
-// Response message after creating a user.
 message CreateUserResponse {
   User user = 1;
 }
 
-// Request message for updating an existing user.
 message UpdateUserRequest {
   string user_id = 1;
-  string email = 2;    // Optional: provide a new email.
-  string username = 3; // Optional: update the display name.
+  string email = 2;
+  string username = 3;
 }
 
-// Response message after updating a user.
 message UpdateUserResponse {
   User user = 1;
 }
@@ -75,39 +71,57 @@ message GetSettingsResponse {
 
 message UpdateSettingsRequest {
   string user_id = 1;
-  int32 pomodoro_duration = 2;     // Duration of a pomodoro session in minutes
-  int32 short_break_duration = 3;  // Duration of a short break in minutes
-  int32 long_break_duration = 4;   // Duration of a long break in minutes
-  bool auto_start_short_break = 5; // Auto-start short break after pomodoro
-  bool auto_start_long_break = 6;  // Auto-start long break after pomodoro
-  bool auto_start_pomodoro = 7;    // Auto-start pomodoro after break
-  int32 pomodoro_interval = 8;    // Number of pomodoros before a long break
-  string theme = 9;               // UI theme preference (e.g., "light", "dark")
-  bool short_break_notification = 10; // Notify when short break ends
-  bool long_break_notification = 11;  // Notify when long break ends
-  bool pomodoro_notification = 12;    // Notify when pomodoro ends
-  bool auto_start_music = 13;         // Auto-start background music
-  string language = 14;               // Preferred language (e.g., "en", "es")
+  int32 pomodoro_duration = 2;
+  int32 short_break_duration = 3;
+  int32 long_break_duration = 4;
+  bool auto_start_short_break = 5;
+  bool auto_start_long_break = 6;
+  bool auto_start_pomodoro = 7;
+  int32 pomodoro_interval = 8;
+  string theme = 9;
+  bool short_break_notification = 10;
+  bool long_break_notification = 11;
+  bool pomodoro_notification = 12;
+  bool auto_start_music = 13;
+  string language = 14;
 }
 
 message UpdateSettingsResponse {
   Settings settings = 1;
 }
 
-// UserService defines the operations available for user management.
+// ===== SERVICE =====
 service UserService {
-  // Retrieve a user by user_id.
-  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+  rpc GetUser(GetUserRequest) returns (GetUserResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}"
+    };
+  }
 
-  // Create a new user.
-  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/users"
+      body: "*"
+    };
+  }
 
-  // Update an existing user's profile.
-  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse);
+  rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/users/{user_id}"
+      body: "*"
+    };
+  }
 
-  // Retrieve user settings.
-  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}/settings"
+    };
+  }
 
-  // Update user settings.
-  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse);
+  rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}/settings"
+      body: "*"
+    };
+  }
 }
