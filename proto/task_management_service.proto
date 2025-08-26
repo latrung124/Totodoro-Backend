@@ -5,6 +5,7 @@ package task_management;
 option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management";
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 // ==== ENUMS ====
 enum TaskGroupPriority {
@@ -41,33 +42,33 @@ enum TaskStatus {
 
 // Represents a group of related tasks.
 message TaskGroup {
-  string group_id = 1;                     
-  string user_id = 2;                      
-  string icon = 3;                         
-  string name = 4;                         
-  string description = 5;                  
-  google.protobuf.Timestamp deadline = 6;  
-  TaskGroupPriority priority = 7;          
-  TaskGroupStatus status = 8;              
-  int32 completed_tasks = 9;               
-  int32 total_tasks = 10;                  
+  string group_id = 1;
+  string user_id = 2;
+  string icon = 3;
+  string name = 4;
+  string description = 5;
+  google.protobuf.Timestamp deadline = 6;
+  TaskGroupPriority priority = 7;
+  TaskGroupStatus status = 8;
+  int32 completed_tasks = 9;
+  int32 total_tasks = 10;
   google.protobuf.Timestamp created_at = 11;
   google.protobuf.Timestamp updated_at = 12;
 }
 
 // Represents an individual task.
 message Task {
-  string task_id = 1;                      
-  string user_id = 2;                      
-  string group_id = 3;                     
-  string name = 4;                         
-  string description = 5;                  
-  int32 completed_pomodoros = 6;           
-  int32 total_pomodoros = 7;               
-  int32 progress = 8;                      
-  TaskPriority priority = 9;               
-  TaskStatus status = 10;                  
-  google.protobuf.Timestamp deadline = 11; 
+  string task_id = 1;
+  string user_id = 2;
+  string group_id = 3;
+  string name = 4;
+  string description = 5;
+  int32 completed_pomodoros = 6;
+  int32 total_pomodoros = 7;
+  int32 progress = 8;
+  TaskPriority priority = 9;
+  TaskStatus status = 10;
+  google.protobuf.Timestamp deadline = 11;
   google.protobuf.Timestamp created_at = 12;
   google.protobuf.Timestamp updated_at = 13;
 }
@@ -147,15 +148,48 @@ message DeleteTaskResponse {
 }
 
 // ==== SERVICE DEFINITION ====
-
 service TaskManagementService {
   // Task group operations
-  rpc CreateTaskGroup(CreateTaskGroupRequest) returns (CreateTaskGroupResponse);
-  rpc GetTaskGroups(GetTaskGroupsRequest) returns (GetTaskGroupsResponse);
+  rpc CreateTaskGroup(CreateTaskGroupRequest) returns (CreateTaskGroupResponse) {
+    option (google.api.http) = {
+      post: "/v1/task-groups"
+      body: "*"
+    };
+  }
+
+  rpc GetTaskGroups(GetTaskGroupsRequest) returns (GetTaskGroupsResponse) {
+    option (google.api.http) = {
+      get: "/v1/users/{user_id}/task-groups"
+    };
+  }
 
   // Task operations
-  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
-  rpc GetTasks(GetTasksRequest) returns (GetTasksResponse);
-  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse);
-  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse);
+  rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse) {
+    option (google.api.http) = {
+      post: "/v1/task-groups/{group_id}/tasks"
+      body: "*"
+    };
+  }
+
+  rpc GetTasks(GetTasksRequest) returns (GetTasksResponse) {
+    option (google.api.http) = {
+      get: "/v1/users/{user_id}/tasks"
+      additional_bindings {
+        get: "/v1/task-groups/{group_id}/tasks"
+      }
+    };
+  }
+
+  rpc UpdateTask(UpdateTaskRequest) returns (UpdateTaskResponse) {
+    option (google.api.http) = {
+      patch: "/v1/tasks/{task_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteTask(DeleteTaskRequest) returns (DeleteTaskResponse) {
+    option (google.api.http) = {
+      delete: "/v1/tasks/{task_id}"
+    };
+  }
 }

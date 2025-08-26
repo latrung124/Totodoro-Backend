@@ -74,17 +74,17 @@ func New(ctx context.Context, opt Options) (*Gateway, error) {
 }
 
 func (g *Gateway) ListenAndServe() error {
-	log.Printf("[gateway] starting http server on %s", g.Server.Addr)
+	log.Printf("[ApiGateway] starting http server on %s", g.Server.Addr)
 	return g.Server.ListenAndServe()
 }
 
 func (g *Gateway) Shutdown(ctx context.Context) error {
-	log.Printf("[gateway] shutting down http server")
+	log.Printf("[ApiGateway] shutting down http server")
 	if g.Server != nil {
 		_ = g.Server.Shutdown(ctx)
 	}
 	if g.UserConn != nil {
-		log.Printf("[gateway] closing user gRPC connection")
+		log.Printf("[ApiGateway] closing user gRPC connection")
 		_ = g.UserConn.Close()
 	}
 	return nil

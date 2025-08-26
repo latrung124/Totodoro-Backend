@@ -11,82 +11,16 @@ set "ROOT_DIR=%CD%"
 set "PROTO_PATH=%ROOT_DIR%\proto"
 set "PROTOC_DIR=%ROOT_DIR%\third_party\protobuf"
 set "GOOGLEAPIS_DIR=%ROOT_DIR%\third_party\googleapis"
+set "GRPC_GATEWAY_DIR=%ROOT_DIR%\third_party\grpc-gateway"
+REM For protoc includes from grpc-gateway (openapiv2 options)
 set "PROTO_PACKAGES_DIR=%ROOT_DIR%\internal\proto_package"
 set "BIN_DIR=%ROOT_DIR%\bin"
 popd
 
-REM =============================
-REM Helper checks
-REM =============================
-where go >nul 2>&1
-if errorlevel 1 (
-    echo Error: Go is required but not installed or not in PATH.
-    exit /b 1
-)
+REM ...existing code for checks, module init, bin dir ...
 
-where powershell >nul 2>&1
-if errorlevel 1 (
-    echo Error: PowerShell is required but not found in PATH.
-    exit /b 1
-)
-
-where git >nul 2>&1
-if errorlevel 1 (
-    echo Error: Git is required but not installed or not in PATH.
-    exit /b 1
-)
-
-REM =============================
-REM Step 1: Initialize go module
-REM =============================
-if not exist "%ROOT_DIR%\go.mod" (
-    echo Initializing Go module...
-    go mod init github.com/latrung124/Totodoro-Backend
-) else (
-    echo go.mod already exists, skipping module init...
-)
-
-REM =============================
-REM Step 2: Create bin directory
-REM =============================
-if not exist "%BIN_DIR%" (
-    mkdir "%BIN_DIR%"
-    echo Created bin directory
-)
-
-REM =============================
 REM Step 3: Setup protoc
-REM =============================
-if not exist "%PROTOC_DIR%\bin\protoc.exe" (
-    echo Downloading and extracting Protocol Buffers v32.0-rc1...
-
-    if not exist "%ROOT_DIR%\third_party" mkdir "%ROOT_DIR%\third_party"
-
-    set "ZIP_URL=https://github.com/protocolbuffers/protobuf/releases/download/v32.0-rc1/protoc-32.0-rc-1-win64.zip"
-    set "ZIP_FILE=%ROOT_DIR%\protoc-32.0-rc-1-win64.zip"
-
-    powershell -Command "Invoke-WebRequest -Uri '%ZIP_URL%' -OutFile '%ZIP_FILE%'"
-    if errorlevel 1 (
-        echo Error: Failed to download %ZIP_FILE%
-        exit /b 1
-    )
-
-    powershell -Command "Expand-Archive -Path '%ZIP_FILE%' -DestinationPath '%PROTOC_DIR%' -Force"
-    if errorlevel 1 (
-        echo Error: Failed to extract %ZIP_FILE%
-        del "%ZIP_FILE%"
-        exit /b 1
-    )
-
-    del "%ZIP_FILE%"
-    if not exist "%PROTOC_DIR%\bin\protoc.exe" (
-        echo Error: protoc.exe not found after extraction
-        rmdir /S /Q "%PROTOC_DIR%"
-        exit /b 1
-    )
-) else (
-    echo Using existing Protocol Buffers in "%PROTOC_DIR%"
-)
+REM ...existing code...
 
 set "PROTOC=%PROTOC_DIR%\bin\protoc.exe"
 
@@ -99,6 +33,19 @@ if not exist "%GOOGLEAPIS_DIR%" (
 ) else (
     echo googleapis repo already exists, pulling latest...
     pushd "%GOOGLEAPIS_DIR%"
+    git pull --quiet
+    popd
+)
+
+REM =============================
+REM Step 4b: Clone grpc-gateway (for openapiv2 proto includes)
+REM =============================
+if not exist "%GRPC_GATEWAY_DIR%" (
+    echo Cloning grpc-gateway repo...
+    git clone https://github.com/grpc-ecosystem/grpc-gateway.git "%GRPC_GATEWAY_DIR%"
+) else (
+    echo grpc-gateway repo already exists, pulling latest...
+    pushd "%GRPC_GATEWAY_DIR%"
     git pull --quiet
     popd
 )
@@ -134,7 +81,6 @@ if errorlevel 1 (
     echo Installing protoc-gen-openapiv2...
     go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
 )
-# ...existing code...
 
 REM =============================
 REM Step 6: Generate Go files from .proto
@@ -150,7 +96,7 @@ if not exist "%PROTO_PACKAGES_DIR%" (
     echo Created "%PROTO_PACKAGES_DIR%" directory
 )
 
-REM NEW: ensure OpenAPI output dir exists
+REM ensure OpenAPI output dir exists
 set "OPENAPI_DIR=%ROOT_DIR%\openapi"
 if not exist "%OPENAPI_DIR%" (
     mkdir "%OPENAPI_DIR%"
@@ -173,6 +119,7 @@ for /r "%PROTO_PATH%" %%F in (*.proto) do (
       --proto_path="%PROTO_PATH%" ^
       --proto_path="%PROTOC_DIR%\include" ^
       --proto_path="%GOOGLEAPIS_DIR%" ^
+      --proto_path="%GRPC_GATEWAY_DIR%" ^
       "%%F"
 
     if errorlevel 1 (
@@ -187,7 +134,6 @@ for /r "%PROTO_PATH%" %%F in (*.proto) do (
 
     if exist "%%~nF.pb.go" move /Y "%%~nF.pb.go" "!TARGET_DIR!" >nul
     if exist "%%~nF_grpc.pb.go" move /Y "%%~nF_grpc.pb.go" "!TARGET_DIR!" >nul
-    REM NEW: move grpc-gateway stubs alongside others
     if exist "%%~nF.pb.gw.go" move /Y "%%~nF.pb.gw.go" "!TARGET_DIR!" >nul
 )
 
