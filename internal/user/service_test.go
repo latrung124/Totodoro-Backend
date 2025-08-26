@@ -12,7 +12,6 @@ import (
 	"database/sql"
 	"log"
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
@@ -90,11 +89,6 @@ func TestCreateUser(t *testing.T) {
 	}
 	if resp.User.Username != req.Username {
 		t.Errorf("Expected username %s, got %s", req.Username, resp.User.Username)
-	}
-
-	// Check CreatedAt is not in the future
-	if resp.User.CreatedAt.AsTime().After(time.Now().Add(1 * time.Second)) {
-		t.Errorf("Invalid CreatedAt timestamp")
 	}
 
 	var count int

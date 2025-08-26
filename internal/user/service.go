@@ -13,11 +13,13 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
+	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -36,8 +38,12 @@ func NewService(db *database.Connections) *Service {
 
 // GetUser retrieves a user by user_id.
 func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetUserResponse, error) {
-	if req.UserId == "" {
+	if req.GetUserId() == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	if _, err := uuid.Parse(req.UserId); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid user_id format")
 	}
 
 	var (
@@ -74,36 +80,51 @@ func (s *Service) GetUser(ctx context.Context, req *pb.GetUserRequest) (*pb.GetU
 
 // CreateUser creates a new user with the provided details.
 func (s *Service) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*pb.CreateUserResponse, error) {
-	if req.Email == "" || req.Username == "" {
+	email := strings.TrimSpace(req.GetEmail())
+	username := strings.TrimSpace(req.GetUsername())
+
+	if email == "" || username == "" {
 		return nil, status.Error(codes.InvalidArgument, "email and username are required")
 	}
 
-	// Generate a unique user_id (e.g., UUID would be better in production)
-	userId := uuid.NewString()
+	var (
+		id                   uuid.UUID
+		createdAt, updatedAt sql.NullTime
+	)
+	id = uuid.New()
+	createdAt = sql.NullTime{Time: time.Now(), Valid: true}
+	updatedAt = sql.NullTime{Time: time.Now(), Valid: true}
 
-	// Set current timestamp
-	now := time.Now()
-	newUser := &pb.User{
-		UserId:    userId,
-		Email:     req.Email,
-		Username:  req.Username,
-		CreatedAt: timestamppb.New(now),
-		UpdatedAt: timestamppb.New(now),
-	}
-
-	// Convert timestamppb.Timestamp to time.Time
-	createdAt := newUser.CreatedAt.AsTime()
-	updatedAt := newUser.UpdatedAt.AsTime()
-
-	// Insert into the database
-	_, err := s.db.UserDB.ExecContext(ctx, "INSERT INTO users (user_id, email, username, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)",
-		newUser.UserId, newUser.Email, newUser.Username, createdAt, updatedAt)
+	err := s.db.UserDB.QueryRowContext(ctx, `
+        INSERT INTO users (user_id, email, username)
+        VALUES ($1, $2, $3)
+        RETURNING user_id, created_at, updated_at
+    `, id, email, username).Scan(&id, &createdAt, &updatedAt)
 	if err != nil {
-		log.Printf("Failed to create user: %v", err)
-		return nil, status.Error(codes.Internal, "failed to create user")
+		var pqErr *pq.Error
+		switch {
+		case errors.As(err, &pqErr) && pqErr.Code == "23505":
+			// unique_violation
+			return nil, status.Error(codes.AlreadyExists, "email already exists")
+		default:
+			log.Printf("CreateUser insert failed: %v", err)
+			return nil, status.Error(codes.Internal, "failed to create user")
+		}
 	}
 
-	return &pb.CreateUserResponse{User: newUser}, nil
+	u := &pb.User{
+		UserId:   id.String(),
+		Email:    email,
+		Username: username,
+	}
+	if createdAt.Valid {
+		u.CreatedAt = timestamppb.New(createdAt.Time)
+	}
+	if updatedAt.Valid {
+		u.UpdatedAt = timestamppb.New(updatedAt.Time)
+	}
+
+	return &pb.CreateUserResponse{User: u}, nil
 }
 
 // UpdateUser updates an existing user's profile.
