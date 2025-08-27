@@ -23,6 +23,7 @@ die() { echo "Error: $*" >&2; exit 1; }
 
 # Basic tool checks
 need_cmd go || die "Go is required. Install Go and re-run."
+need_cmd git || die "Git is required. Install Git and re-run."
 if ! need_cmd unzip; then
   echo "Installing unzip..."
   if need_cmd apt-get; then
@@ -46,6 +47,15 @@ download() {
 
 echo "Go version: $(go version)"
 
+# Paths
+PROTO_PATH="$ROOT_DIR/proto"
+PROTOC_DIR="$ROOT_DIR/third_party/protobuf"
+GOOGLEAPIS_DIR="$ROOT_DIR/third_party/googleapis"
+GRPC_GATEWAY_DIR="$ROOT_DIR/third_party/grpc-gateway"
+PROTO_PACKAGES_DIR="$ROOT_DIR/internal/proto_package"
+OPENAPI_DIR="$ROOT_DIR/openapi"
+BIN_DIR="$ROOT_DIR/bin"
+
 # Step 1: Initialize go module (optional if already exists)
 if [[ ! -f go.mod ]]; then
   echo "Initializing Go module..."
@@ -54,33 +64,45 @@ else
   echo "go.mod already exists, skipping module init..."
 fi
 
-# Step 3: Create bin directory
-mkdir -p bin
-echo "Ensured bin directory exists"
+# Step 2: Create dirs
+mkdir -p "$BIN_DIR" "$PROTO_PACKAGES_DIR" "$OPENAPI_DIR" "$ROOT_DIR/third_party"
+echo "Ensured bin, proto_package, openapi, and third_party directories exist"
 
-# Step 4: Check and setup Protocol Buffers v32.0-rc1
-PROTOC_DIR="third_party/protobuf"
+# Step 3: Setup protoc
 PROTOC_BIN="$PROTOC_DIR/bin/protoc"
 if [[ ! -x "$PROTOC_BIN" ]]; then
   echo "Downloading and extracting Protocol Buffers v32.0-rc1..."
-  mkdir -p third_party
   ZIP_URL="https://github.com/protocolbuffers/protobuf/releases/download/v32.0-rc1/protoc-32.0-rc-1-linux-x86_64.zip"
   ZIP_FILE="protoc-32.0-rc-1-linux-x86_64.zip"
   download "$ZIP_FILE" "$ZIP_URL" || die "Failed to download $ZIP_FILE"
-
   rm -rf "$PROTOC_DIR"
   mkdir -p "$PROTOC_DIR"
   unzip -o "$ZIP_FILE" -d "$PROTOC_DIR"
   rm -f "$ZIP_FILE"
-
   [[ -x "$PROTOC_BIN" ]] || { rm -rf "$PROTOC_DIR"; die "protoc not found after extraction"; }
 else
   echo "Using existing Protocol Buffers in $PROTOC_DIR"
 fi
-
 echo "protoc version: $("$PROTOC_BIN" --version)"
 
-# Ensure protoc plugins are available
+# Step 4: Clone googleapis and grpc-gateway protos
+if [[ ! -d "$GOOGLEAPIS_DIR/.git" ]]; then
+  echo "Cloning googleapis repo..."
+  git clone https://github.com/googleapis/googleapis.git "$GOOGLEAPIS_DIR"
+else
+  echo "googleapis repo already exists, pulling latest..."
+  git -C "$GOOGLEAPIS_DIR" pull --quiet
+fi
+
+if [[ ! -d "$GRPC_GATEWAY_DIR/.git" ]]; then
+  echo "Cloning grpc-gateway repo..."
+  git clone https://github.com/grpc-ecosystem/grpc-gateway.git "$GRPC_GATEWAY_DIR"
+else
+  echo "grpc-gateway repo already exists, pulling latest..."
+  git -C "$GRPC_GATEWAY_DIR" pull --quiet
+fi
+
+# Step 5: Install protoc plugins
 export PATH="$(go env GOPATH)/bin:$PATH"
 if ! command -v protoc-gen-go >/dev/null 2>&1; then
   echo "Installing protoc-gen-go..."
@@ -90,19 +112,21 @@ if ! command -v protoc-gen-go-grpc >/dev/null 2>&1; then
   echo "Installing protoc-gen-go-grpc..."
   go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 fi
+# grpc-gateway v2 plugins
+if ! command -v protoc-gen-grpc-gateway >/dev/null 2>&1; then
+  echo "Installing protoc-gen-grpc-gateway..."
+  go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-grpc-gateway@latest
+fi
+if ! command -v protoc-gen-openapiv2 >/dev/null 2>&1; then
+  echo "Installing protoc-gen-openapiv2..."
+  go install github.com/grpc-ecosystem/grpc-gateway/v2/protoc-gen-openapiv2@latest
+fi
 
-# Step 5: Generate Go files from all .proto files
-PROTO_PATH="$ROOT_DIR/proto"
+# Step 6: Generate Go files from all .proto files
 echo "Checking proto path: \"$PROTO_PATH\""
 [[ -d "$PROTO_PATH" ]] || die "Proto path not found: $PROTO_PATH"
 
-echo "Current working directory: \"$PWD\""
-echo "Generating protobuf files..."
-
-PROTO_PACKAGES_DIR="$ROOT_DIR/internal/proto_package"
-mkdir -p "$PROTO_PACKAGES_DIR"
-echo "Ensured \"$PROTO_PACKAGES_DIR\" directory exists"
-
+echo "Generating protobuf, gRPC, gateway, and OpenAPI files..."
 while IFS= read -r -d '' proto; do
   echo "Processing $proto..."
   base="$(basename "$proto" .proto)"
@@ -113,48 +137,41 @@ while IFS= read -r -d '' proto; do
     --go_opt=Mproto/${base}.proto=github.com/latrung124/Totodoro-Backend/internal/proto_package/${base} \
     --go-grpc_out=. \
     --go-grpc_opt=paths=source_relative \
+    --grpc-gateway_out=. \
+    --grpc-gateway_opt=paths=source_relative,generate_unbound_methods=true \
+    --openapiv2_out="$OPENAPI_DIR" \
+    --openapiv2_opt=logtostderr=true \
     --proto_path="$PROTO_PATH" \
     --proto_path="$PROTOC_DIR/include" \
+    --proto_path="$GOOGLEAPIS_DIR" \
+    --proto_path="$GRPC_GATEWAY_DIR" \
     "$proto"
-
-  echo "Successfully generated protobuf files for $proto"
 
   target_dir="$PROTO_PACKAGES_DIR/$base"
   mkdir -p "$target_dir"
 
-  pb_file="${base}.pb.go"
-  grpc_file="${base}_grpc.pb.go"
-
-  if [[ -f "$pb_file" ]]; then
-    mv -f "$pb_file" "$target_dir"/
-  elif [[ -f "proto/$pb_file" ]]; then
-    mv -f "proto/$pb_file" "$target_dir"/
-  else
-    echo "Warning: Generated file \"$pb_file\" not found"
-  fi
-
-  if [[ -f "$grpc_file" ]]; then
-    mv -f "$grpc_file" "$target_dir"/
-  elif [[ -f "proto/$grpc_file" ]]; then
-    mv -f "proto/$grpc_file" "$target_dir"/
-  else
-    echo "Warning: Generated file \"$grpc_file\" not found"
-  fi
+  # Move generated files if they appear in CWD or proto/
+  for f in "${base}.pb.go" "${base}_grpc.pb.go" "${base}.pb.gw.go"; do
+    if [[ -f "$f" ]]; then
+      mv -f "$f" "$target_dir"/
+    elif [[ -f "proto/$f" ]]; then
+      mv -f "proto/$f" "$target_dir"/
+    fi
+  done
+  echo "Generated into $target_dir"
 done < <(find "$PROTO_PATH" -type f -name '*.proto' -print0)
 
-# Step 6: Now that proto packages exist, tidy modules
-echo "Downloading dependencies..."
+# Step 7: Now that proto packages exist, tidy modules
+echo "Downloading dependencies (go mod tidy)..."
 go mod tidy
 
-# Step 7: Build the project
+# Step 8: Build the project
 echo "Building the project..."
 [[ -f "main.go" ]] || die "main.go not found in the project root"
-
-echo "Running go build with verbose output..."
-if ! go build -v -o bin/totodoro-backend .; then
+if ! go build -v -o "$BIN_DIR/totodoro-backend" .; then
   echo "Error: Build failed"
-  echo "Capturing build errors..."
-  go build -o bin/totodoro-backend . 2> build_errors.log || true
+  go build -o "$BIN_DIR/totodoro-backend" . 2> build_errors.log || true
+  echo "---------- build_errors.log ----------"
   cat build_errors.log || true
   exit 1
 fi
