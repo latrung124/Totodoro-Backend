@@ -98,6 +98,30 @@ message GetTaskGroupsResponse {
   repeated TaskGroup groups = 1;
 }
 
+message DeleteTaskGroupRequest {
+  string group_id = 1;
+}
+
+message DeleteTaskGroupResponse {
+  bool success = 1;
+}
+
+message UpdateTaskGroupRequest {
+  string group_id = 1;
+  string icon = 2;
+  string name = 3;
+  string description = 4;
+  TaskGroupStatus status = 5;
+  TaskGroupPriority priority = 6;
+  int32 completed_tasks = 7;
+  int32 total_tasks = 8;
+  google.protobuf.Timestamp deadline = 9;
+}
+
+message UpdateTaskGroupResponse {
+  bool success = 1;
+}
+
 // Task CRUD
 message CreateTaskRequest {
   string user_id = 1;
@@ -160,6 +184,19 @@ service TaskManagementService {
   rpc GetTaskGroups(GetTaskGroupsRequest) returns (GetTaskGroupsResponse) {
     option (google.api.http) = {
       get: "/v1/users/{user_id}/task-groups"
+    };
+  }
+
+  rpc UpdateTaskGroup(UpdateTaskGroupRequest) returns (UpdateTaskGroupResponse) {
+    option (google.api.http) = {
+      patch: "/v1/task-groups/{group_id}"
+      body: "*"
+    };
+  }
+
+  rpc DeleteTaskGroup(DeleteTaskGroupRequest) returns (DeleteTaskGroupResponse) {
+    option (google.api.http) = {
+      delete: "/v1/task-groups/{group_id}"
     };
   }
 

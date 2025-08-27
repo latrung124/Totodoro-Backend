@@ -283,6 +283,131 @@ func TestGetTaskGroups_InvalidUserId(t *testing.T) {
 	}
 }
 
+func TestUpdateTaskGroup(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	groupId := uuid.NewString()
+	name := "Test Task Group"
+	description := "This is a test task group"
+
+	seedTaskGroup(t, connections.TaskDB, groupId, userId, name, description)
+	defer RemoveTaskGroup(connections, groupId)
+
+	newName := "Updated Task Group Name"
+	newIcon := "Updated Icon"
+	newDescription := "Updated task group description"
+	newPriority := pb.TaskGroupPriority_TASK_GROUP_PRIORITY_HIGH
+	newStatus := pb.TaskGroupStatus_TASK_GROUP_STATUS_IN_PROGRESS
+	newDeadline := time.Now().Add(48 * time.Hour)
+	completedTasks := int32(1)
+	totalTasks := int32(3)
+
+	req := &pb.UpdateTaskGroupRequest{
+		GroupId:        groupId,
+		Name:           newName,
+		Icon:           newIcon,
+		Description:    newDescription,
+		Priority:       newPriority,
+		Status:         newStatus,
+		CompletedTasks: completedTasks,
+		TotalTasks:     totalTasks,
+		Deadline:       timestamppb.New(newDeadline),
+	}
+
+	resp, err := service.UpdateTaskGroup(context.Background(), req)
+	if err != nil {
+		t.Fatalf("UpdateTaskGroup failed: %v", err)
+	}
+
+	if resp.Success != true {
+		t.Errorf("Expected success true, got false")
+	}
+
+	var (
+		gotName, gotIcon, gotDescription, gotPriority, gotStatus string
+		gotCompleted, gotTotal                                   int32
+		deadlineNT                                               sql.NullTime
+	)
+
+	err = connections.TaskDB.QueryRow(`
+		SELECT name, icon, description, priority, status, completed_tasks, total_tasks, deadline
+		FROM task_groups
+		WHERE group_id = $1`, groupId).Scan(
+		&gotName, &gotIcon, &gotDescription, &gotPriority, &gotStatus, &gotCompleted, &gotTotal, &deadlineNT,
+	)
+
+	if err != nil {
+		t.Fatalf("Failed to fetch updated task group: %v", err)
+	}
+
+	if gotName != newName || gotDescription != newDescription || gotIcon != newIcon {
+		t.Errorf("Persisted name/description/icon mismatch: expected %q/%q/%q, got %q/%q/%q",
+			newName, newDescription, newIcon, gotName, gotDescription, gotIcon)
+	}
+
+	priorityLabel := helper.TaskGroupPriorityDbEnumToString(newPriority)
+	if gotPriority != string(priorityLabel) {
+		t.Errorf("Persisted priority expected %s, got %s", string(priorityLabel), gotPriority)
+	}
+
+	statusLabel := helper.TaskGroupStatusDbEnumToString(newStatus)
+	if gotStatus != string(statusLabel) {
+		t.Errorf("Persisted status expected %s, got %s", string(statusLabel), gotStatus)
+	}
+
+	if gotCompleted != completedTasks || gotTotal != totalTasks {
+		t.Errorf("Persisted completed/total expected %d/%d, got %d/%d",
+			completedTasks, totalTasks, gotCompleted, gotTotal)
+	}
+}
+
+func TestDeleteTaskGroup(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	groupId := uuid.NewString()
+	name := "Test Task Group"
+	description := "This is a test task group"
+
+	seedTaskGroup(t, connections.TaskDB, groupId, userId, name, description)
+
+	req := &pb.DeleteTaskGroupRequest{
+		GroupId: groupId,
+	}
+
+	resp, err := service.DeleteTaskGroup(context.Background(), req)
+	if err != nil {
+		t.Fatalf("DeleteTaskGroup failed: %v", err)
+	}
+
+	if resp.Success != true {
+		t.Errorf("Expected success true, got false")
+	}
+
+	var count int
+	err = connections.TaskDB.QueryRow("SELECT COUNT(*) FROM task_groups WHERE group_id = $1", groupId).Scan(&count)
+	if err != nil {
+		t.Fatalf("Failed to verify deletion: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("Expected 0 rows for group_id %s, found %d", groupId, count)
+	}
+}
+
 func seedTask(
 	t *testing.T,
 	db *sql.DB,

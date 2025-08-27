@@ -287,6 +287,24 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	return &pb.UpdateTaskResponse{Task: &task}, nil
 }
 
+func (s *Service) DeleteTask(ctx context.Context, req *pb.DeleteTaskRequest) (*pb.DeleteTaskResponse, error) {
+	if req.TaskId == "" {
+		return nil, status.Error(codes.InvalidArgument, "task_id is required")
+	}
+
+	res, err := s.db.TaskDB.ExecContext(ctx, "DELETE FROM tasks WHERE task_id = $1", req.TaskId)
+	if err != nil {
+		log.Printf("Error deleting task: %v", err)
+		return nil, status.Error(codes.Internal, "failed to delete task")
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return nil, status.Error(codes.NotFound, "task not found")
+	}
+
+	return &pb.DeleteTaskResponse{Success: true}, nil
+}
+
 func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRequest) (*pb.CreateTaskGroupResponse, error) {
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
@@ -381,4 +399,75 @@ func (s *Service) GetTaskGroups(ctx context.Context, req *pb.GetTaskGroupsReques
 	}
 
 	return &pb.GetTaskGroupsResponse{Groups: groups}, nil
+}
+
+func (s *Service) UpdateTaskGroup(ctx context.Context, req *pb.UpdateTaskGroupRequest) (*pb.UpdateTaskGroupResponse, error) {
+	if req.GroupId == "" {
+		return nil, status.Error(codes.InvalidArgument, "group_id is required")
+	}
+
+	now := time.Now()
+
+	var deadlineVal any
+	if req.Deadline != nil {
+		deadlineVal = req.Deadline.AsTime()
+	} else {
+		deadlineVal = nil
+	}
+
+	priorityLabel := helper.TaskGroupPriorityDbEnumToString(req.Priority)
+	statusLabel := helper.TaskGroupStatusDbEnumToString(req.Status)
+
+	res, err := s.db.TaskDB.ExecContext(ctx, `
+		UPDATE task_groups SET
+			icon = $1,
+			name = $2,
+			description = $3,
+			deadline = $4,
+			priority = $5,
+			status = $6,
+			completed_tasks = $7,
+			total_tasks = $8,
+			updated_at = $9
+		WHERE group_id = $10
+	`,
+		req.Icon,
+		req.Name,
+		req.Description,
+		deadlineVal,
+		priorityLabel,
+		statusLabel,
+		req.CompletedTasks,
+		req.TotalTasks,
+		now,
+		req.GroupId,
+	)
+	if err != nil {
+		log.Printf("Error updating task group: %v", err)
+		return &pb.UpdateTaskGroupResponse{Success: false}, status.Error(codes.Internal, "failed to update task group")
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return &pb.UpdateTaskGroupResponse{Success: false}, status.Error(codes.NotFound, "task group not found")
+	}
+
+	return &pb.UpdateTaskGroupResponse{Success: true}, nil
+}
+
+func (s *Service) DeleteTaskGroup(ctx context.Context, req *pb.DeleteTaskGroupRequest) (*pb.DeleteTaskGroupResponse, error) {
+	if req.GroupId == "" {
+		return nil, status.Error(codes.InvalidArgument, "group_id is required")
+	}
+
+	res, err := s.db.TaskDB.ExecContext(ctx, "DELETE FROM task_groups WHERE group_id = $1", req.GroupId)
+	if err != nil {
+		log.Printf("Error deleting task group: %v", err)
+		return nil, status.Error(codes.Internal, "failed to delete task group")
+	}
+	affected, _ := res.RowsAffected()
+	if affected == 0 {
+		return nil, status.Error(codes.NotFound, "task group not found")
+	}
+
+	return &pb.DeleteTaskGroupResponse{Success: true}, nil
 }
