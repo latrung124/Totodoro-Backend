@@ -19,7 +19,6 @@ import (
 	"github.com/latrung124/Totodoro-Backend/internal/database"
 	"github.com/latrung124/Totodoro-Backend/internal/helper"
 	pb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
-	"github.com/lib/pq"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -36,43 +35,58 @@ func NewService(db *database.Connections) *Service {
 
 // CreatePomodoro creates a new pomodoro session for a user.
 func (s *Service) CreateSession(ctx context.Context, req *pb.CreateSessionRequest) (*pb.CreateSessionResponse, error) {
-	if req.UserId == "" {
-		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	if req.UserId == "" || req.TaskId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_id and task_id are required")
 	}
 
-	if req.TaskId == "" {
-		return nil, status.Error(codes.InvalidArgument, "task_id is required")
-	}
+	sessionID := uuid.New().String()
+	startTime := time.Now()
+	sessionStatus := helper.SessionStatusDbEnumToString(pb.SessionStatus_SESSION_STATUS_IDLE)
+	sessionType := helper.SessionTypeDbEnumToString(req.SessionType)
 
-	//Start session
-	sessionId := uuid.NewString()
-
-	newSession := &pb.PomodoroSession{
-		SessionId:     sessionId,
-		UserId:        req.UserId,
-		TaskId:        req.TaskId,
-		StartTime:     req.StartTime,
-		Progress:      0,
-		EndTime:       timestamppb.New(req.StartTime.AsTime().Add(25 * time.Minute)),
-		Status:        pb.SessionStatus_SESSION_STATUS_IDLE,
-		SessionType:   pb.SessionType_SESSION_TYPE_SHORT_BREAK,
-		NumberInCycle: 0,
-		LastUpdate:    timestamppb.Now(),
-	}
-
-	statusStr := helper.SessionStatusDbEnumToString(newSession.Status)
-	sessionTypeStr := helper.SessionTypeDbEnumToString(newSession.SessionType)
-
-	_, err := s.db.PomodoroDB.ExecContext(ctx, "INSERT INTO sessions (session_id, user_id, task_id, start_time, progress, end_time, status, session_type, number_in_cycle, last_update) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", newSession.SessionId, newSession.UserId, newSession.TaskId, newSession.StartTime.AsTime(), newSession.Progress, newSession.EndTime.AsTime(), statusStr, sessionTypeStr, newSession.NumberInCycle, newSession.LastUpdate.AsTime())
+	_, err := s.db.PomodoroDB.ExecContext(ctx, `
+		INSERT INTO sessions (session_id, user_id, task_id, start_time, progress, end_time, status,
+		session_type, number_in_cycle, last_update)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		sessionID,
+		req.UserId,
+		req.TaskId,
+		startTime,
+		int32(0),                      // initial progress
+		startTime.Add(25*time.Minute), // default end time for a pomodoro session
+		sessionStatus,                 // initial status
+		sessionType,                   // default session type
+		int32(1),                      // initial number in cycle
+		startTime,                     // last update time
+	)
 	if err != nil {
-		if pgErr, ok := err.(*pq.Error); ok && pgErr.Code == "23505" { // Unique violation
-			return nil, status.Error(codes.AlreadyExists, "session already exists")
-		}
-		log.Printf("Failed to insert session: %v", err)
+		log.Printf("Failed to create session: %v", err)
 		return nil, status.Error(codes.Internal, "failed to create session")
 	}
 
-	return &pb.CreateSessionResponse{Session: newSession}, nil
+	// Retrieve the created session to return
+	var session pb.PomodoroSession
+	row := s.db.PomodoroDB.QueryRowContext(ctx, `SELECT session_id, user_id, task_id, start_time, progress, end_time, status,
+		session_type, number_in_cycle, last_update
+		FROM sessions WHERE session_id = $1`, sessionID)
+	var start, end, lastUpdate time.Time
+	var statusStr, sessionTypeStr string
+	var progress int32
+	var numberInCycle int32
+	if err := row.Scan(&session.SessionId, &session.UserId, &session.TaskId, &start, &progress, &end, &statusStr, &sessionTypeStr, &numberInCycle, &lastUpdate); err != nil {
+		log.Printf("Failed to retrieve created session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve created session")
+	}
+
+	session.StartTime = timestamppb.New(start)
+	session.EndTime = timestamppb.New(end)
+	session.Progress = progress
+	session.Status = helper.SessionStatusDbStringToEnum(statusStr)
+	session.SessionType = helper.SessionTypeDbStringToEnum(sessionTypeStr)
+	session.NumberInCycle = numberInCycle
+	session.LastUpdate = timestamppb.New(lastUpdate)
+	log.Printf("Session created successfully: %s", session.SessionId)
+	return &pb.CreateSessionResponse{Session: &session}, nil
 }
 
 func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (*pb.GetSessionsResponse, error) {
@@ -136,6 +150,40 @@ func (s *Service) GetSessions(ctx context.Context, req *pb.GetSessionsRequest) (
 	}
 
 	return &pb.GetSessionsResponse{Sessions: sessions}, nil
+}
+
+func (s *Service) GetSessionById(ctx context.Context, req *pb.GetSessionByIdRequest) (*pb.GetSessionByIdResponse, error) {
+	if req.SessionId == "" {
+		return nil, status.Error(codes.InvalidArgument, "session_id is required")
+	}
+
+	var session pb.PomodoroSession
+	var start, end, lastUpdate time.Time
+	var statusStr, sessionTypeStr string
+	var progress int32
+	var numberInCycle int32
+
+	row := s.db.PomodoroDB.QueryRowContext(ctx, `SELECT session_id, user_id, task_id, start_time, progress, end_time, status,
+		session_type, number_in_cycle, last_update
+		FROM sessions WHERE session_id = $1`, req.SessionId)
+
+	if err := row.Scan(&session.SessionId, &session.UserId, &session.TaskId, &start, &progress, &end, &statusStr, &sessionTypeStr, &numberInCycle, &lastUpdate); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, status.Error(codes.NotFound, "session not found")
+		}
+		log.Printf("Failed to retrieve session: %v", err)
+		return nil, status.Error(codes.Internal, "failed to retrieve session")
+	}
+
+	session.StartTime = timestamppb.New(start)
+	session.EndTime = timestamppb.New(end)
+	session.Progress = progress
+	session.Status = helper.SessionStatusDbStringToEnum(statusStr)
+	session.SessionType = helper.SessionTypeDbStringToEnum(sessionTypeStr)
+	session.NumberInCycle = numberInCycle
+	session.LastUpdate = timestamppb.New(lastUpdate)
+
+	return &pb.GetSessionByIdResponse{Session: &session}, nil
 }
 
 func (s *Service) UpdateSession(ctx context.Context, req *pb.UpdateSessionRequest) (*pb.UpdateSessionResponse, error) {

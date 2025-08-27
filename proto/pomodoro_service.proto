@@ -5,6 +5,7 @@ option go_package = "github.com/latrung124/Totodoro-Backend/internal/proto_packa
 package pomodoro_service;
 
 import "google/protobuf/timestamp.proto";
+import "google/api/annotations.proto";
 
 // ===== ENUM DEFINITIONS =====
 enum SessionStatus {
@@ -57,6 +58,14 @@ message GetSessionsResponse {
   repeated PomodoroSession sessions = 1;
 }
 
+message GetSessionByIdRequest {
+  string session_id = 1;
+}
+
+message GetSessionByIdResponse {
+  PomodoroSession session = 1;
+}
+
 message UpdateSessionRequest {
   string session_id = 1;
   int32 progress = 2;
@@ -81,8 +90,40 @@ message DeleteSessionResponse {
 
 // ===== SERVICE DEFINITION =====
 service PomodoroService {
-  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
-  rpc GetSessions(GetSessionsRequest) returns (GetSessionsResponse);
-  rpc UpdateSession(UpdateSessionRequest) returns (UpdateSessionResponse);
-  rpc DeleteSession(DeleteSessionRequest) returns (DeleteSessionResponse);
+  // Create a new session
+  rpc CreateSession (CreateSessionRequest) returns (CreateSessionResponse) {  // fixed
+    option (google.api.http) = {
+      post: "/v1/users/{user_id}/sessions"
+      body: "*"
+    };
+  }
+
+  // List all sessions for a user (optionally filter by task_id)
+  rpc GetSessions (GetSessionsRequest) returns (GetSessionsResponse) {
+    option (google.api.http) = {
+      get: "/v1/users/{user_id}/sessions"
+    };
+  }
+
+  // Get a session by ID
+  rpc GetSessionById (GetSessionByIdRequest) returns (GetSessionByIdResponse) { // fixed
+    option (google.api.http) = {
+      get: "/v1/sessions/{session_id}"
+    };
+  }
+
+  // Update a session (partial update)
+  rpc UpdateSession (UpdateSessionRequest) returns (UpdateSessionResponse) { // fixed
+    option (google.api.http) = {
+      patch: "/v1/sessions/{session_id}"
+      body: "*"
+    };
+  }
+
+  // Delete a session
+  rpc DeleteSession (DeleteSessionRequest) returns (DeleteSessionResponse) {
+    option (google.api.http) = {
+      delete: "/v1/sessions/{session_id}"
+    };
+  }
 }

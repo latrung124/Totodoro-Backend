@@ -188,6 +188,51 @@ func TestGetSessions(t *testing.T) {
 	RemovePomodoroSession(connections, sessionId)
 }
 
+func TestGetSessionById(t *testing.T) {
+	connections, err := setupTestDB()
+	if err != nil {
+		t.Fatalf("Failed to set up test database: %v", err)
+	}
+	defer connections.Close()
+
+	service := NewService(connections)
+
+	userId := uuid.NewString()
+	taskId := uuid.NewString()
+	sessionId := uuid.NewString()
+	startTime := time.Now()
+	endTime := startTime.Add(25 * time.Minute)
+
+	// Seed a test session
+	SeedPomodoroSession(t, connections.PomodoroDB, sessionId, userId, taskId, startTime, endTime)
+
+	req := &pb.GetSessionByIdRequest{
+		SessionId: sessionId,
+	}
+
+	resp, err := service.GetSessionById(context.Background(), req)
+	if err != nil {
+		t.Fatalf("GetSessionById failed: %v", err)
+	}
+
+	if resp.Session == nil {
+		t.Fatal("Expected a session in response, got nil")
+	}
+
+	if resp.Session.SessionId != sessionId {
+		t.Errorf("Expected SessionId %s, got %s", sessionId, resp.Session.SessionId)
+	}
+	if resp.Session.UserId != userId {
+		t.Errorf("Expected UserId %s, got %s", userId, resp.Session.UserId)
+	}
+	if resp.Session.TaskId != taskId {
+		t.Errorf("Expected TaskId %s, got %s", taskId, resp.Session.TaskId)
+	}
+
+	// Clean up test session
+	RemovePomodoroSession(connections, sessionId)
+}
+
 func TestUpdateSessionResponse(t *testing.T) {
 	connections, err := setupTestDB()
 	if err != nil {
