@@ -124,6 +124,13 @@ func (s *Service) CreateUser(ctx context.Context, req *pb.CreateUserRequest) (*p
 		u.UpdatedAt = timestamppb.New(updatedAt.Time)
 	}
 
+	// Create default settings for the new user
+	if err := s.CreateDefaultSettings(ctx, u.UserId); err != nil {
+		log.Printf("Failed to create default settings for user %s: %v", u.UserId, err)
+	} else {
+		log.Printf("Default settings created for user %s", u.UserId)
+	}
+
 	return &pb.CreateUserResponse{User: u}, nil
 }
 
@@ -245,9 +252,66 @@ func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (
 	return &pb.GetSettingsResponse{Settings: settings}, nil
 }
 
+func (s *Service) CreateDefaultSettings(ctx context.Context, userId string) error {
+	var (
+		pomodoroDuration       int32  = 25
+		shortBreakDuration     int32  = 5
+		longBreakDuration      int32  = 15
+		autoStartShortBreak           = false
+		autoStartLongBreak            = false
+		autoStartPomodoro             = false
+		pomodoroInterval       int32  = 4
+		theme                  string = "#222222"
+		shortBreakNotification        = true
+		longBreakNotification         = true
+		pomodoroNotification          = true
+		autoStartMusic                = false
+		language               string = "en"
+	)
+	_, err := s.db.UserDB.ExecContext(ctx, `
+		INSERT INTO settings (
+			user_id,
+			pomodoro_duration, short_break_duration, long_break_duration,
+			auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+			pomodoro_interval, theme,
+			short_break_notification, long_break_notification, pomodoro_notification,
+			auto_start_music, language
+		) VALUES (
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+		)
+	`, userId,
+		pomodoroDuration, shortBreakDuration, longBreakDuration,
+		autoStartShortBreak, autoStartLongBreak, autoStartPomodoro,
+		pomodoroInterval, theme,
+		shortBreakNotification, longBreakNotification, pomodoroNotification,
+		autoStartMusic, language,
+	)
+
+	if err != nil {
+		log.Printf("Failed to create default settings: %v", err)
+		return status.Error(codes.Internal, "failed to create default settings")
+	}
+
+	log.Printf("Default settings created for user_id: %s", userId)
+	return nil
+}
+
 func (s *Service) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequest) (*pb.UpdateSettingsResponse, error) {
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
+	}
+
+	selectErr := s.db.UserDB.QueryRowContext(ctx, "SELECT 1 FROM settings WHERE user_id = $1 LIMIT 1", req.UserId).Err()
+	if selectErr != nil {
+		if errors.Is(selectErr, sql.ErrNoRows) {
+			log.Printf("No existing settings for user_id %s, creating default settings", req.UserId)
+			if err := s.CreateDefaultSettings(ctx, req.UserId); err != nil {
+				return nil, err
+			}
+		}
+		log.Printf("Failed to check existing settings: %v", selectErr)
+	} else {
+		log.Printf("Existing settings found for user_id %s, proceeding to update", req.UserId)
 	}
 
 	_, err := s.db.UserDB.ExecContext(ctx, `
