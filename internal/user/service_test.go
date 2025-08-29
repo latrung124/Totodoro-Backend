@@ -66,11 +66,34 @@ func seedTestUser(t *testing.T, db *sql.DB, userId string, email string, usernam
 	}
 }
 
+func cleanupTestUser(db *sql.DB) {
+	// DELETE all test users created during tests
+	_, err := db.Exec("DELETE FROM users WHERE email LIKE '%@example.com'")
+	if err != nil {
+		log.Printf("Failed to clean up test users: %v", err)
+	} else {
+		log.Println("Test users cleaned up successfully")
+	}
+}
+
+func cleanupTestSettings(db *sql.DB) {
+	_, err := db.Exec("DELETE FROM settings WHERE user_id IN (SELECT user_id FROM users WHERE email LIKE '%@example.com')")
+	if err != nil {
+		log.Printf("Failed to clean up test settings: %v", err)
+	} else {
+		log.Println("Test settings cleaned up successfully")
+	}
+}
+
 func TestCreateUser(t *testing.T) {
 	connections, err := setupTestDB()
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
+	defer connections.Close()
+
+	cleanupTestSettings(connections.UserDB)
+	cleanupTestUser(connections.UserDB)
 
 	service := NewService(connections)
 
@@ -112,10 +135,11 @@ func TestGetUser(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
+	defer connections.Close()
 
 	service := NewService(connections)
 	testUserID := uuid.NewString()
-	seedTestUser(t, connections.UserDB, testUserID, "TestGetUser@gmail.com", "TestGetUser")
+	seedTestUser(t, connections.UserDB, testUserID, "TestGetUser@example.com", "TestGetUser")
 
 	req := &pb.GetUserRequest{
 		UserId: testUserID,
@@ -129,8 +153,8 @@ func TestGetUser(t *testing.T) {
 	if resp.User.UserId != req.UserId {
 		t.Errorf("Expected UserId %s, got %s", req.UserId, resp.User.UserId)
 	}
-	if resp.User.Email != "TestGetUser@gmail.com" {
-		t.Errorf("Expected Email TestGetUser@gmail.com, got %s", resp.User.Email)
+	if resp.User.Email != "TestGetUser@example.com" {
+		t.Errorf("Expected Email TestGetUser@example.com, got %s", resp.User.Email)
 	}
 	if resp.User.Username != "TestGetUser" {
 		t.Errorf("Expected Username TestGetUser, got %s", resp.User.Username)
@@ -147,6 +171,10 @@ func TestGetUserNotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
+	defer connections.Close()
+
+	cleanupTestSettings(connections.UserDB)
+	cleanupTestUser(connections.UserDB)
 
 	service := NewService(connections)
 
@@ -165,14 +193,18 @@ func TestUpdateUser(t *testing.T) {
 	if err != nil {
 		t.Fatal("Failed to set up test database connections")
 	}
+	defer connections.Close()
+
+	cleanupTestSettings(connections.UserDB)
+	cleanupTestUser(connections.UserDB)
 
 	service := NewService(connections)
 	testUserID := uuid.NewString()
-	seedTestUser(t, connections.UserDB, testUserID, "TestUpdateUser@gmail.com", "TestUpdateUser")
+	seedTestUser(t, connections.UserDB, testUserID, "TestUpdateUser@example.com", "TestUpdateUser")
 
 	req := &pb.UpdateUserRequest{
 		UserId:   testUserID,
-		Email:    "TestUpdateUser_After@gmail.com",
+		Email:    "TestUpdateUser_After@example.com",
 		Username: "TestUpdateUser_After",
 	}
 
@@ -204,8 +236,6 @@ func TestUpdateUser(t *testing.T) {
 	RemoveUserId(connections, req.UserId)
 }
 
-// ...existing code...
-
 func SeedSettings(t *testing.T, db *sql.DB, s *pb.Settings) {
 	t.Helper()
 	if s == nil || s.UserId == "" {
@@ -219,8 +249,8 @@ func SeedSettings(t *testing.T, db *sql.DB, s *pb.Settings) {
             auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
             pomodoro_interval, theme,
             short_break_notification, long_break_notification, pomodoro_notification,
-            auto_start_music, language
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+            auto_start_music, language, auto_start_next_task
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
         ON CONFLICT (user_id) DO UPDATE SET
             pomodoro_duration = EXCLUDED.pomodoro_duration,
             short_break_duration = EXCLUDED.short_break_duration,
@@ -234,13 +264,14 @@ func SeedSettings(t *testing.T, db *sql.DB, s *pb.Settings) {
             long_break_notification = EXCLUDED.long_break_notification,
             pomodoro_notification = EXCLUDED.pomodoro_notification,
             auto_start_music = EXCLUDED.auto_start_music,
-            language = EXCLUDED.language`,
+            language = EXCLUDED.language,
+			auto_start_next_task = EXCLUDED.auto_start_next_task`,
 		s.UserId,
 		s.PomodoroDuration, s.ShortBreakDuration, s.LongBreakDuration,
 		s.AutoStartShortBreak, s.AutoStartLongBreak, s.AutoStartPomodoro,
 		s.PomodoroInterval, s.Theme,
 		s.ShortBreakNotification, s.LongBreakNotification, s.PomodoroNotification,
-		s.AutoStartMusic, s.Language,
+		s.AutoStartMusic, s.Language, s.AutoStartNextTask,
 	)
 	if err != nil {
 		t.Fatalf("Failed to seed settings: %v", err)
@@ -250,8 +281,6 @@ func SeedSettings(t *testing.T, db *sql.DB, s *pb.Settings) {
 func RemoveSettings(connections *database.Connections, userID string) {
 	_, _ = connections.UserDB.Exec("DELETE FROM settings WHERE user_id = $1", userID)
 }
-
-// ...existing code...
 
 func TestGetSettings(t *testing.T) {
 	connections, err := setupTestDB()
@@ -278,6 +307,7 @@ func TestGetSettings(t *testing.T) {
 	expPomodoroNotification := true
 	expAutoStartMusic := false
 	expLanguage := "en"
+	expAutoStartNextTask := true
 
 	SeedSettings(t, connections.UserDB, &pb.Settings{
 		UserId:                 userID,
@@ -294,6 +324,7 @@ func TestGetSettings(t *testing.T) {
 		PomodoroNotification:   expPomodoroNotification,
 		AutoStartMusic:         expAutoStartMusic,
 		Language:               expLanguage,
+		AutoStartNextTask:      expAutoStartNextTask,
 	})
 
 	resp, err := service.GetSettings(context.Background(), &pb.GetSettingsRequest{UserId: userID})
@@ -347,6 +378,9 @@ func TestGetSettings(t *testing.T) {
 	if got.Language != expLanguage {
 		t.Errorf("language: want %q, got %q", expLanguage, got.Language)
 	}
+	if got.AutoStartNextTask != expAutoStartNextTask {
+		t.Errorf("auto_start_next_task: want %v, got %v", expAutoStartNextTask, got.AutoStartNextTask)
+	}
 
 	_, _ = connections.UserDB.Exec("DELETE FROM settings WHERE user_id = $1", userID)
 	RemoveUserId(connections, userID)
@@ -360,10 +394,13 @@ func TestUpdateSettings(t *testing.T) {
 	}
 	defer connections.Close()
 
+	cleanupTestSettings(connections.UserDB)
+	cleanupTestUser(connections.UserDB)
+
 	service := NewService(connections)
 
 	userID := uuid.NewString()
-	seedTestUser(t, connections.UserDB, userID, "updateSettingsUser@gmail.com", "UpdateSettingsUser")
+	seedTestUser(t, connections.UserDB, userID, "updateSettingsUser@example.com", "UpdateSettingsUser")
 	SeedSettings(t, connections.UserDB, &pb.Settings{
 		UserId:                 userID,
 		PomodoroDuration:       25,
@@ -379,6 +416,7 @@ func TestUpdateSettings(t *testing.T) {
 		PomodoroNotification:   true,
 		AutoStartMusic:         false,
 		Language:               "en",
+		AutoStartNextTask:      true,
 	})
 
 	req := &pb.UpdateSettingsRequest{
@@ -396,6 +434,7 @@ func TestUpdateSettings(t *testing.T) {
 		PomodoroNotification:   false,
 		AutoStartMusic:         true,
 		Language:               "es",
+		AutoStartNextTask:      false,
 	}
 
 	resp, err := service.UpdateSettings(context.Background(), req)
@@ -462,6 +501,10 @@ func TestUpdateSettings(t *testing.T) {
 
 	if got.Language != req.Language {
 		t.Errorf("language: want %q, got %q", req.Language, got.Language)
+	}
+
+	if got.AutoStartNextTask != req.AutoStartNextTask {
+		t.Errorf("auto_start_next_task: want %v, got %v", req.AutoStartNextTask, got.AutoStartNextTask)
 	}
 
 	_, _ = connections.UserDB.Exec("DELETE FROM settings WHERE user_id = $1", userID)

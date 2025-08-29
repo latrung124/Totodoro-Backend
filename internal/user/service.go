@@ -205,6 +205,7 @@ func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (
 		pomodoroNotification   bool
 		autoStartMusic         bool
 		language               string
+		autoStartNextTask      bool
 	)
 
 	err := s.db.UserDB.QueryRowContext(ctx, `
@@ -213,7 +214,7 @@ func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (
                auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
                pomodoro_interval, theme,
                short_break_notification, long_break_notification, pomodoro_notification,
-               auto_start_music, language
+               auto_start_music, language, auto_start_next_task
         FROM settings
         WHERE user_id = $1
     `, req.UserId).Scan(
@@ -222,7 +223,7 @@ func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (
 		&autoStartShortBreak, &autoStartLongBreak, &autoStartPomodoro,
 		&pomodoroInterval, &theme,
 		&shortBreakNotification, &longBreakNotification, &pomodoroNotification,
-		&autoStartMusic, &language,
+		&autoStartMusic, &language, &autoStartNextTask,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -247,6 +248,7 @@ func (s *Service) GetSettings(ctx context.Context, req *pb.GetSettingsRequest) (
 		PomodoroNotification:   pomodoroNotification,
 		AutoStartMusic:         autoStartMusic,
 		Language:               language,
+		AutoStartNextTask:      autoStartNextTask,
 	}
 
 	return &pb.GetSettingsResponse{Settings: settings}, nil
@@ -267,6 +269,7 @@ func (s *Service) CreateDefaultSettings(ctx context.Context, userId string) erro
 		pomodoroNotification          = true
 		autoStartMusic                = false
 		language               string = "en"
+		autoStartNextTask             = false
 	)
 	_, err := s.db.UserDB.ExecContext(ctx, `
 		INSERT INTO settings (
@@ -275,16 +278,17 @@ func (s *Service) CreateDefaultSettings(ctx context.Context, userId string) erro
 			auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
 			pomodoro_interval, theme,
 			short_break_notification, long_break_notification, pomodoro_notification,
-			auto_start_music, language
+			auto_start_music, language,
+			auto_start_next_task
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
 		)
 	`, userId,
 		pomodoroDuration, shortBreakDuration, longBreakDuration,
 		autoStartShortBreak, autoStartLongBreak, autoStartPomodoro,
 		pomodoroInterval, theme,
 		shortBreakNotification, longBreakNotification, pomodoroNotification,
-		autoStartMusic, language,
+		autoStartMusic, language, autoStartNextTask,
 	)
 
 	if err != nil {
@@ -299,57 +303,6 @@ func (s *Service) CreateDefaultSettings(ctx context.Context, userId string) erro
 func (s *Service) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequest) (*pb.UpdateSettingsResponse, error) {
 	if req.UserId == "" {
 		return nil, status.Error(codes.InvalidArgument, "user_id is required")
-	}
-
-	selectErr := s.db.UserDB.QueryRowContext(ctx, "SELECT 1 FROM settings WHERE user_id = $1 LIMIT 1", req.UserId).Err()
-	if selectErr != nil {
-		if errors.Is(selectErr, sql.ErrNoRows) {
-			log.Printf("No existing settings for user_id %s, creating default settings", req.UserId)
-			if err := s.CreateDefaultSettings(ctx, req.UserId); err != nil {
-				return nil, err
-			}
-		}
-		log.Printf("Failed to check existing settings: %v", selectErr)
-	} else {
-		log.Printf("Existing settings found for user_id %s, proceeding to update", req.UserId)
-	}
-
-	_, err := s.db.UserDB.ExecContext(ctx, `
-        INSERT INTO settings (
-            user_id,
-            pomodoro_duration, short_break_duration, long_break_duration,
-            auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
-            pomodoro_interval, theme,
-            short_break_notification, long_break_notification, pomodoro_notification,
-            auto_start_music, language
-        ) VALUES (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
-        )
-        ON CONFLICT (user_id) DO UPDATE SET
-            pomodoro_duration       = EXCLUDED.pomodoro_duration,
-            short_break_duration    = EXCLUDED.short_break_duration,
-            long_break_duration     = EXCLUDED.long_break_duration,
-            auto_start_short_break  = EXCLUDED.auto_start_short_break,
-            auto_start_long_break   = EXCLUDED.auto_start_long_break,
-            auto_start_pomodoro     = EXCLUDED.auto_start_pomodoro,
-            pomodoro_interval       = EXCLUDED.pomodoro_interval,
-            theme                   = EXCLUDED.theme,
-            short_break_notification= EXCLUDED.short_break_notification,
-            long_break_notification = EXCLUDED.long_break_notification,
-            pomodoro_notification   = EXCLUDED.pomodoro_notification,
-            auto_start_music        = EXCLUDED.auto_start_music,
-            language                = EXCLUDED.language
-    `,
-		req.UserId,
-		req.PomodoroDuration, req.ShortBreakDuration, req.LongBreakDuration,
-		req.AutoStartShortBreak, req.AutoStartLongBreak, req.AutoStartPomodoro,
-		req.PomodoroInterval, req.Theme,
-		req.ShortBreakNotification, req.LongBreakNotification, req.PomodoroNotification,
-		req.AutoStartMusic, req.Language,
-	)
-	if err != nil {
-		log.Printf("Failed to upsert settings: %v", err)
-		return nil, status.Error(codes.Internal, "failed to update settings")
 	}
 
 	var (
@@ -367,30 +320,59 @@ func (s *Service) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequ
 		pomodoroNotification   bool
 		autoStartMusic         bool
 		language               string
+		autoStartNextTask      bool
 	)
-	err = s.db.UserDB.QueryRowContext(ctx, `
-        SELECT user_id,
-               pomodoro_duration, short_break_duration, long_break_duration,
-               auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
-               pomodoro_interval, theme,
-               short_break_notification, long_break_notification, pomodoro_notification,
-               auto_start_music, language
-        FROM settings
-        WHERE user_id = $1
-    `, req.UserId).Scan(
+
+	err := s.db.UserDB.QueryRowContext(ctx, `
+        INSERT INTO settings (
+            user_id,
+            pomodoro_duration, short_break_duration, long_break_duration,
+            auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+            pomodoro_interval, theme,
+            short_break_notification, long_break_notification, pomodoro_notification,
+            auto_start_music, language, auto_start_next_task
+        ) VALUES (
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
+        )
+        ON CONFLICT (user_id) DO UPDATE SET
+            pomodoro_duration        = EXCLUDED.pomodoro_duration,
+            short_break_duration     = EXCLUDED.short_break_duration,
+            long_break_duration      = EXCLUDED.long_break_duration,
+            auto_start_short_break   = EXCLUDED.auto_start_short_break,
+            auto_start_long_break    = EXCLUDED.auto_start_long_break,
+            auto_start_pomodoro      = EXCLUDED.auto_start_pomodoro,
+            pomodoro_interval        = EXCLUDED.pomodoro_interval,
+            theme                    = EXCLUDED.theme,
+            short_break_notification = EXCLUDED.short_break_notification,
+            long_break_notification  = EXCLUDED.long_break_notification,
+            pomodoro_notification    = EXCLUDED.pomodoro_notification,
+            auto_start_music         = EXCLUDED.auto_start_music,
+            language                 = EXCLUDED.language,
+            auto_start_next_task     = EXCLUDED.auto_start_next_task
+        RETURNING user_id,
+                  pomodoro_duration, short_break_duration, long_break_duration,
+                  auto_start_short_break, auto_start_long_break, auto_start_pomodoro,
+                  pomodoro_interval, theme,
+                  short_break_notification, long_break_notification, pomodoro_notification,
+                  auto_start_music, language, auto_start_next_task
+    `,
+		req.UserId,
+		req.PomodoroDuration, req.ShortBreakDuration, req.LongBreakDuration,
+		req.AutoStartShortBreak, req.AutoStartLongBreak, req.AutoStartPomodoro,
+		req.PomodoroInterval, req.Theme,
+		req.ShortBreakNotification, req.LongBreakNotification, req.PomodoroNotification,
+		req.AutoStartMusic, req.Language, req.AutoStartNextTask,
+	).Scan(
 		&userID,
 		&pomodoroDuration, &shortBreakDuration, &longBreakDuration,
 		&autoStartShortBreak, &autoStartLongBreak, &autoStartPomodoro,
 		&pomodoroInterval, &theme,
 		&shortBreakNotification, &longBreakNotification, &pomodoroNotification,
-		&autoStartMusic, &language,
+		&autoStartMusic, &language, &autoStartNextTask,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, status.Error(codes.NotFound, "settings not found")
-		}
-		log.Printf("Failed to fetch updated settings: %v", err)
-		return nil, status.Error(codes.Internal, "failed to fetch updated settings")
+		log.Printf("Failed to upsert settings: %v", err)
+		return nil, status.Error(codes.Internal, "failed to update settings")
 	}
 
 	settings := &pb.Settings{
@@ -408,6 +390,7 @@ func (s *Service) UpdateSettings(ctx context.Context, req *pb.UpdateSettingsRequ
 		PomodoroNotification:   pomodoroNotification,
 		AutoStartMusic:         autoStartMusic,
 		Language:               language,
+		AutoStartNextTask:      autoStartNextTask,
 	}
 
 	return &pb.UpdateSettingsResponse{Settings: settings}, nil

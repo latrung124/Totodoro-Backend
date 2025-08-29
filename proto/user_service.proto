@@ -31,6 +31,7 @@ message Settings {
   bool pomodoro_notification = 12;
   bool auto_start_music = 13;
   string language = 14;
+  bool auto_start_next_task = 15;
 }
 
 // ===== REQUESTS/RESPONSES =====
@@ -84,6 +85,7 @@ message UpdateSettingsRequest {
   bool pomodoro_notification = 12;
   bool auto_start_music = 13;
   string language = 14;
+  bool auto_start_next_task = 15;
 }
 
 message UpdateSettingsResponse {
