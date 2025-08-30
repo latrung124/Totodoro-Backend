@@ -20,6 +20,7 @@ import (
 
 	"github.com/latrung124/Totodoro-Backend/internal/api_gateway"
 	"github.com/latrung124/Totodoro-Backend/internal/config"
+	"github.com/latrung124/Totodoro-Backend/internal/config/google_config"
 	"github.com/latrung124/Totodoro-Backend/internal/server"
 )
 
@@ -58,10 +59,17 @@ func main() {
 		log.Printf("warning: user gRPC not ready after timeout (%v); starting gateway anyway", err)
 	}
 
+	// Set Google Application Credentials for OIDC
+	googleCfg, err := google_config.GetGoogleConfig()
+	if err != nil {
+		log.Fatalf("failed to get google config: %v", err)
+	}
+
 	// Start API Gateway (REST -> gRPC)
 	gw, err := api_gateway.New(ctx, api_gateway.Options{
 		HTTPAddr:        httpAddr,
 		UserServiceAddr: userGRPCAddr,
+		OIDCClientID:    googleCfg.ClientID,
 	})
 	if err != nil {
 		log.Fatalf("failed to init API gateway: %v", err)

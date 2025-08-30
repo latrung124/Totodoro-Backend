@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"time"
 
+	authmw "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/middleware"
+	oidc "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/oidc"
 	"github.com/latrung124/Totodoro-Backend/internal/api_gateway/handler"
 	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"google.golang.org/grpc"
@@ -34,6 +36,8 @@ type Options struct {
 	HTTPAddr string
 	// gRPC addresses
 	UserServiceAddr string // e.g. "localhost:50051"
+	// OIDC Client ID for authentication
+	OIDCClientID string
 }
 
 func New(ctx context.Context, opt Options) (*Gateway, error) {
@@ -59,6 +63,20 @@ func New(ctx context.Context, opt Options) (*Gateway, error) {
 	// Register HTTP handlers
 	uh := handler.NewUserHandler(gw.UserClient)
 	handler.RegisterUserRoutes(gw.Mux, uh)
+
+	// Build root handler and wrap with auth if configured
+	var root http.Handler = gw.Mux
+	if opt.OIDCClientID != "" {
+		authenticator, err := oidc.NewOIDCAuthenticator(ctx, opt.OIDCClientID)
+		if err != nil {
+			log.Printf("[ApiGateway] OIDC init failed: %v (auth disabled)", err)
+		} else {
+			root = authmw.AuthMiddleware(authenticator)(root)
+			log.Printf("[ApiGateway] OIDC auth enabled")
+		}
+	} else {
+		log.Printf("[ApiGateway] OIDC auth disabled (no client ID)")
+	}
 
 	gw.Server = &http.Server{
 		Addr:         opt.HTTPAddr,
