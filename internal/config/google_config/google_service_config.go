@@ -2,7 +2,7 @@
 File: internal/config/google_config.go
 Author: trung.la
 Date: 08/30/2025
-Description: Google Cloud configuration management.
+Description: Google Service Key management.
 */
 
 package google_config
@@ -16,7 +16,7 @@ import (
 )
 
 // Exported fields + JSON tags so decoding works
-type GoogleConfig struct {
+type GoogleServiceConfig struct {
 	Type                    string `json:"type"`
 	ProjectID               string `json:"project_id"`
 	PrivateKeyID            string `json:"private_key_id"`
@@ -30,7 +30,7 @@ type GoogleConfig struct {
 	UniverseDomain          string `json:"universe_domain"`
 }
 
-func GetGoogleConfig() (*GoogleConfig, error) {
+func GetGoogleServiceConfig() (*GoogleServiceConfig, error) {
 	config.Load()
 
 	cfg, err := config.GetConfig()
@@ -44,11 +44,11 @@ func GetGoogleConfig() (*GoogleConfig, error) {
 	}
 	defer jsonFile.Close()
 
-	var googleConfig GoogleConfig
+	var googleServiceConfig GoogleServiceConfig
 	decoder := json.NewDecoder(jsonFile)
-	if err := decoder.Decode(&googleConfig); err != nil {
+	if err := decoder.Decode(&googleServiceConfig); err != nil {
 		return nil, fmt.Errorf("failed to decode google credential file: %w", err)
 	}
 
-	return &googleConfig, nil
+	return &googleServiceConfig, nil
 }

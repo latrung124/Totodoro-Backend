@@ -59,17 +59,17 @@ func main() {
 		log.Printf("warning: user gRPC not ready after timeout (%v); starting gateway anyway", err)
 	}
 
-	// Set Google Application Credentials for OIDC
-	googleCfg, err := google_config.GetGoogleConfig()
+	// Set Google Client Secret key for OIDC
+	googleClientSecret, err := google_config.GetGoogleClientSecret()
 	if err != nil {
-		log.Fatalf("failed to get google config: %v", err)
+		log.Fatalf("failed to load google client secret: %v", err)
 	}
 
 	// Start API Gateway (REST -> gRPC)
 	gw, err := api_gateway.New(ctx, api_gateway.Options{
 		HTTPAddr:        httpAddr,
 		UserServiceAddr: userGRPCAddr,
-		OIDCClientID:    googleCfg.ClientID,
+		OIDCClientID:    googleClientSecret.ClientID,
 	})
 	if err != nil {
 		log.Fatalf("failed to init API gateway: %v", err)
