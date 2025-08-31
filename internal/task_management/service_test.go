@@ -411,7 +411,7 @@ func TestDeleteTaskGroup(t *testing.T) {
 func seedTask(
 	t *testing.T,
 	db *sql.DB,
-	taskId, userId, groupId, name, description string,
+	taskId, userId, groupId, icon, name, description string,
 	priority pb.TaskPriority,
 	status pb.TaskStatus,
 	totalPomodoros, completedPomodoros, progress int32,
@@ -430,13 +430,14 @@ func seedTask(
 
 	_, err := db.Exec(
 		`INSERT INTO tasks (
-            task_id, user_id, group_id, name, description,
+            task_id, user_id, group_id, icon, name, description,
             priority, status, total_pomodoros, completed_pomodoros, progress,
             deadline, created_at, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		taskId,
 		userId,
 		groupId,
+		icon,
 		name,
 		description,
 		string(helper.TaskPriorityDbEnumToString(priority)),
@@ -474,6 +475,7 @@ func TestCreateTask(t *testing.T) {
 
 	userId := uuid.NewString()
 	groupId := uuid.NewString()
+	icon := "This is a test icon"
 	name := "Test Task"
 	description := "This is a test task"
 	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
@@ -487,6 +489,7 @@ func TestCreateTask(t *testing.T) {
 	req := &pb.CreateTaskRequest{
 		UserId:         userId,
 		GroupId:        groupId,
+		Icon:           icon,
 		Name:           name,
 		Description:    description,
 		Priority:       priority,
@@ -498,6 +501,10 @@ func TestCreateTask(t *testing.T) {
 	resp, err := service.CreateTask(context.Background(), req)
 	if err != nil {
 		t.Fatalf("CreateTask failed: %v", err)
+	}
+
+	if resp.Task.Icon != icon {
+		t.Errorf("Expected icon %s, got icon %s", icon, resp.Task.Icon)
 	}
 
 	if resp.Task.Name != name {
@@ -546,6 +553,7 @@ func TestGetTasks(t *testing.T) {
 	userId := uuid.NewString()
 	groupId := uuid.NewString()
 	taskId := uuid.NewString()
+	icon := "This is a test icon"
 	name := "Test Task"
 	description := "This is a test task"
 	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
@@ -556,7 +564,7 @@ func TestGetTasks(t *testing.T) {
 	seedTaskGroup(t, connections.TaskDB, groupId, userId, "Test Group", "This is a test group")
 	defer RemoveTaskGroup(connections, groupId)
 
-	seedTask(t, connections.TaskDB, taskId, userId, groupId, name, description,
+	seedTask(t, connections.TaskDB, taskId, userId, groupId, icon, name, description,
 		priority, status, totalPomodoros, 0, 0, &deadline)
 	defer RemoveTask(connections, taskId)
 
@@ -612,6 +620,7 @@ func TestUpdateTask(t *testing.T) {
 	userId := uuid.NewString()
 	groupId := uuid.NewString()
 	taskId := uuid.NewString()
+	icon := "This is a test icon"
 	name := "Test Task"
 	description := "This is a test task"
 	priority := pb.TaskPriority_TASK_PRIORITY_MEDIUM
@@ -624,7 +633,7 @@ func TestUpdateTask(t *testing.T) {
 	seedTaskGroup(t, connections.TaskDB, groupId, userId, "Test Group", "This is a test group")
 	defer RemoveTaskGroup(connections, groupId)
 
-	seedTask(t, connections.TaskDB, taskId, userId, groupId, name, description,
+	seedTask(t, connections.TaskDB, taskId, userId, groupId, icon, name, description,
 		priority, status, totalPomodoros, 0, 0, &deadline)
 	defer RemoveTask(connections, taskId)
 
@@ -635,6 +644,7 @@ func TestUpdateTask(t *testing.T) {
 
 	req := &pb.UpdateTaskRequest{
 		TaskId:             taskId,
+		Icon:               icon,
 		Name:               newName,
 		Description:        newDescription,
 		Priority:           newPriority,
@@ -652,6 +662,10 @@ func TestUpdateTask(t *testing.T) {
 
 	if resp.Task.TaskId != taskId {
 		t.Errorf("Expected task ID %s, got %s", taskId, resp.Task.TaskId)
+	}
+
+	if resp.Task.Icon != icon {
+		t.Errorf("Expected icon %s, got icon %s", icon, resp.Task.Icon)
 	}
 
 	if resp.Task.Name != newName {

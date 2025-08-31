@@ -64,6 +64,7 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 		TaskId:             taskId,
 		UserId:             req.UserId,
 		GroupId:            req.GroupId,
+		Icon:               req.Icon,
 		Name:               req.Name,
 		Description:        req.Description,
 		CompletedPomodoros: 0,
@@ -82,13 +83,14 @@ func (s *Service) CreateTask(ctx context.Context, req *pb.CreateTaskRequest) (*p
 	_, err := s.db.TaskDB.ExecContext(
 		ctx,
 		`INSERT INTO tasks (
-            task_id, user_id, group_id, name, description,
+            task_id, user_id, group_id, icon, name, description,
             priority, status, total_pomodoros, completed_pomodoros, progress,
             deadline, created_at, updated_at
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
 		newTask.TaskId,
 		newTask.UserId,
 		newTask.GroupId,
+		newTask.Icon,
 		newTask.Name,
 		newTask.Description,
 		priorityLabel,
@@ -116,7 +118,7 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 
 	rows, err := s.db.TaskDB.QueryContext(ctx, `
         SELECT
-            task_id, group_id, name, description,
+            task_id, group_id, icon, name, description,
             priority, status, total_pomodoros, completed_pomodoros, progress,
             deadline, created_at, updated_at
         FROM tasks
@@ -144,6 +146,7 @@ func (s *Service) GetTasks(ctx context.Context, req *pb.GetTasksRequest) (*pb.Ge
 		if err := rows.Scan(
 			&task.TaskId,
 			&task.GroupId,
+			&task.Icon,
 			&task.Name,
 			&task.Description,
 			&priorityLabel,
@@ -203,17 +206,19 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	res, err := s.db.TaskDB.ExecContext(ctx, `
         UPDATE tasks SET
             name = $1,
-            description = $2,
-            priority = $3,
-            status = $4,
-            total_pomodoros = $5,
-            completed_pomodoros = $6,
-            progress = $7,
-            deadline = $8,
-            updated_at = $9
-        WHERE task_id = $10
+			icon = $2,
+            description = $3,
+            priority = $4,
+            status = $5,
+            total_pomodoros = $6,
+            completed_pomodoros = $7,
+            progress = $8,
+            deadline = $9,
+            updated_at = $10
+        WHERE task_id = $11
     `,
 		req.Name,
+		req.Icon,
 		req.Description,
 		helper.TaskPriorityDbEnumToString(req.Priority),
 		helper.TaskStatusDbEnumToString(req.Status),
@@ -246,7 +251,7 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 	)
 	err = s.db.TaskDB.QueryRowContext(ctx, `
         SELECT
-            task_id, user_id, group_id, name, description,
+            task_id, user_id, group_id, icon, name, description,
             priority, status, total_pomodoros, completed_pomodoros, progress,
             deadline, created_at, updated_at
         FROM tasks
@@ -255,6 +260,7 @@ func (s *Service) UpdateTask(ctx context.Context, req *pb.UpdateTaskRequest) (*p
 		&task.TaskId,
 		&task.UserId,
 		&task.GroupId,
+		&task.Icon,
 		&task.Name,
 		&task.Description,
 		&priorityLabel,

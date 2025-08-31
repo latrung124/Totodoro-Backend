@@ -61,16 +61,17 @@ message Task {
   string task_id = 1;
   string user_id = 2;
   string group_id = 3;
-  string name = 4;
-  string description = 5;
-  int32 completed_pomodoros = 6;
-  int32 total_pomodoros = 7;
-  int32 progress = 8;
-  TaskPriority priority = 9;
-  TaskStatus status = 10;
-  google.protobuf.Timestamp deadline = 11;
-  google.protobuf.Timestamp created_at = 12;
-  google.protobuf.Timestamp updated_at = 13;
+  string icon = 4;
+  string name = 5;
+  string description = 6;
+  int32 completed_pomodoros = 7;
+  int32 total_pomodoros = 8;
+  int32 progress = 9;
+  TaskPriority priority = 10;
+  TaskStatus status = 11;
+  google.protobuf.Timestamp deadline = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
 }
 
 // ==== REQUESTS AND RESPONSES ====
@@ -126,12 +127,13 @@ message UpdateTaskGroupResponse {
 message CreateTaskRequest {
   string user_id = 1;
   string group_id = 2;
-  string name = 3;
-  string description = 4;
-  google.protobuf.Timestamp deadline = 5;
-  TaskPriority priority = 6;
-  TaskStatus status = 7;
-  int32 total_pomodoros = 8;
+  string icon = 3;
+  string name = 4;
+  string description = 5;
+  google.protobuf.Timestamp deadline = 6;
+  TaskPriority priority = 7;
+  TaskStatus status = 8;
+  int32 total_pomodoros = 9;
 }
 
 message CreateTaskResponse {
@@ -149,14 +151,15 @@ message GetTasksResponse {
 
 message UpdateTaskRequest {
   string task_id = 1;
-  string name = 2;
-  string description = 3;
-  google.protobuf.Timestamp deadline = 4;
-  TaskPriority priority = 5;
-  TaskStatus status = 6;
-  int32 completed_pomodoros = 7;
-  int32 total_pomodoros = 8;
-  int32 progress = 9;
+  string icon = 2;
+  string name = 3;
+  string description = 4;
+  google.protobuf.Timestamp deadline = 5;
+  TaskPriority priority = 6;
+  TaskStatus status = 7;
+  int32 completed_pomodoros = 8;
+  int32 total_pomodoros = 9;
+  int32 progress = 10;
 }
 
 message UpdateTaskResponse {
