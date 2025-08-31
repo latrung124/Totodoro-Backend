@@ -76,6 +76,26 @@ Protocol Buffers:
 
 ## Build Only
 
+- Cross-platform (Python wrapper)
+  - Ensure Python 3 is installed.
+  - The wrapper auto-detects your OS and dispatches to the correct script:
+    - Windows -> scripts\build-windows.bat / scripts\setup-windows.bat
+    - Linux/macOS -> scripts/build-ubuntu.sh / scripts/setup-ubuntu.sh
+  ```bash
+  # Setup (generate protobufs, install tools)
+  python3 scripts/run.py setup
+  # Windows alternative:
+  py scripts\run.py setup
+
+  # Build only
+  python3 scripts/run.py build
+  # Windows alternative:
+  py scripts\run.py build
+
+  # Pass extra flags to go build after a -- separator
+  python3 scripts/run.py build -- -race -tags prod
+  ```
+
 - Windows
   - If you already ran setup, the binary is built. To rebuild manually:
     ```bat
