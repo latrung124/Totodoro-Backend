@@ -45,6 +45,8 @@ func main() {
 
 	httpAddr := net.JoinHostPort(cfg.Host, cfg.Port)
 	userGRPCAddr := net.JoinHostPort(cfg.Host, cfg.UserPort)
+	taskmanagementGRPCAddr := net.JoinHostPort(cfg.Host, cfg.TaskPort)
+	pomodoroGRPCAddr := net.JoinHostPort(cfg.Host, cfg.PomodoroPort)
 
 	// Start gRPC server(s)
 	srv := server.NewServer()
@@ -67,9 +69,11 @@ func main() {
 
 	// Start API Gateway (REST -> gRPC)
 	gw, err := api_gateway.New(ctx, api_gateway.Options{
-		HTTPAddr:        httpAddr,
-		UserServiceAddr: userGRPCAddr,
-		OIDCClientID:    googleClientSecret.ClientID,
+		HTTPAddr:                  httpAddr,
+		UserServiceAddr:           userGRPCAddr,
+		OIDCClientID:              googleClientSecret.ClientID,
+		TaskManagementServiceAddr: taskmanagementGRPCAddr,
+		PomodoroServiceAddr:       pomodoroGRPCAddr,
 	})
 	if err != nil {
 		log.Fatalf("failed to init API gateway: %v", err)

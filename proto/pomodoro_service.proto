@@ -93,7 +93,7 @@ service PomodoroService {
   // Create a new session
   rpc CreateSession (CreateSessionRequest) returns (CreateSessionResponse) {  // fixed
     option (google.api.http) = {
-      post: "/v1/users/{user_id}/sessions"
+      post: "/v1/sessions/users/{user_id}"
       body: "*"
     };
   }
@@ -101,7 +101,7 @@ service PomodoroService {
   // List all sessions for a user (optionally filter by task_id)
   rpc GetSessions (GetSessionsRequest) returns (GetSessionsResponse) {
     option (google.api.http) = {
-      get: "/v1/users/{user_id}/sessions"
+      get: "/v1/sessions/users/{user_id}"
     };
   }
 

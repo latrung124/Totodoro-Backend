@@ -96,33 +96,33 @@ message UpdateSettingsResponse {
 service UserService {
   rpc GetUser(GetUserRequest) returns (GetUserResponse) {
     option (google.api.http) = {
-      get: "/api/v1/users/{user_id}"
+      get: "/v1/users/{user_id}"
     };
   }
 
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse) {
     option (google.api.http) = {
-      post: "/api/v1/users"
+      post: "/v1/users"
       body: "*"
     };
   }
 
   rpc UpdateUser(UpdateUserRequest) returns (UpdateUserResponse) {
     option (google.api.http) = {
-      patch: "/api/v1/users/{user_id}"
+      patch: "/v1/users/{user_id}"
       body: "*"
     };
   }
 
   rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse) {
     option (google.api.http) = {
-      get: "/api/v1/users/{user_id}/settings"
+      get: "/v1/users/{user_id}/settings"
     };
   }
 
   rpc UpdateSettings(UpdateSettingsRequest) returns (UpdateSettingsResponse) {
     option (google.api.http) = {
-      put: "/api/v1/users/{user_id}/settings"
+      put: "/v1/users/{user_id}/settings"
       body: "*"
     };
   }

@@ -46,7 +46,6 @@ func RegisterTaskManagementRoutes(mux *http.ServeMux, h *TaskManagementHandler) 
 		log.Printf("[gateway][task] failed to register grpc-gateway handlers: %v", err)
 	}
 
-	// Support both /v1/... (native) and /api/v1/... (prefixed) routes.
-	mux.Handle("/v1/", gwmux)
-	mux.Handle("/api/", http.StripPrefix("/api", gwmux))
+	mux.Handle("/v1/tasks", gwmux)
+	mux.Handle("/v1/task-groups", gwmux)
 }

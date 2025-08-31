@@ -50,8 +50,7 @@ func RegisterUserRoutes(mux *http.ServeMux, h *UserHandler) {
 		log.Printf("[gateway][user] failed to register grpc-gateway handlers: %v", err)
 	}
 
-	// Mount only under /api/ so it won’t shadow other handlers
-	mux.Handle("/api/", gwmux)
+	mux.Handle("/v1/users", gwmux)
 
 	// Health endpoint
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {

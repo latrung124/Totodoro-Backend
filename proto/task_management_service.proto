@@ -183,7 +183,7 @@ service TaskManagementService {
 
   rpc GetTaskGroups(GetTaskGroupsRequest) returns (GetTaskGroupsResponse) {
     option (google.api.http) = {
-      get: "/v1/users/{user_id}/task-groups"
+      get: "/v1/task-groups/users/{user_id}"
     };
   }
 
@@ -210,7 +210,7 @@ service TaskManagementService {
 
   rpc GetTasks(GetTasksRequest) returns (GetTasksResponse) {
     option (google.api.http) = {
-      get: "/v1/users/{user_id}/tasks"
+      get: "/v1/tasks/users/{user_id}"
       additional_bindings {
         get: "/v1/task-groups/{group_id}/tasks"
       }

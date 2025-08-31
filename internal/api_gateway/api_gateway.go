@@ -13,9 +13,9 @@ import (
 	"net/http"
 	"time"
 
-	authmw "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/middleware"
-	oidc "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/oidc"
 	"github.com/latrung124/Totodoro-Backend/internal/api_gateway/handler"
+	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
+	taskmanagementpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -29,13 +29,21 @@ type Gateway struct {
 	// gRPC clients
 	UserConn   *grpc.ClientConn
 	UserClient userpb.UserServiceClient
+
+	TaskManagementConn   *grpc.ClientConn
+	TaskManagementClient taskmanagementpb.TaskManagementServiceClient
+
+	PomodoroConn   *grpc.ClientConn
+	PomodoroClient pomodoropb.PomodoroServiceClient
 }
 
 type Options struct {
 	// HTTP listen address, e.g. ":8080"
 	HTTPAddr string
 	// gRPC addresses
-	UserServiceAddr string // e.g. "localhost:50051"
+	UserServiceAddr           string // e.g. "localhost:50051"
+	TaskManagementServiceAddr string
+	PomodoroServiceAddr       string
 	// OIDC Client ID for authentication
 	OIDCClientID string
 }
@@ -51,32 +59,53 @@ func New(ctx context.Context, opt Options) (*Gateway, error) {
 		}),
 	)
 	if err != nil {
+		log.Printf("[ApiGateway] Failed to connect to UserService: %v", err)
+		return nil, err
+	}
+
+	taskmanagementConn, err := grpc.NewClient(
+		opt.TaskManagementServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			MinConnectTimeout: 5 * time.Second,
+		}),
+	)
+	if err != nil {
+		log.Printf("[ApiGateway] Failed to connect to TaskManagementService: %v", err)
+		return nil, err
+	}
+
+	pomodoroConn, err := grpc.NewClient(
+		opt.PomodoroServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			MinConnectTimeout: 5 * time.Second,
+		}),
+	)
+	if err != nil {
+		log.Printf("[ApiGateway] Failed to connect to PomodoroService: %v", err)
 		return nil, err
 	}
 
 	gw := &Gateway{
-		Mux:        http.NewServeMux(),
-		UserConn:   userConn,
-		UserClient: userpb.NewUserServiceClient(userConn),
+		Mux:                  http.NewServeMux(),
+		UserConn:             userConn,
+		UserClient:           userpb.NewUserServiceClient(userConn),
+		TaskManagementConn:   taskmanagementConn,
+		TaskManagementClient: taskmanagementpb.NewTaskManagementServiceClient(taskmanagementConn),
+		PomodoroConn:         pomodoroConn,
+		PomodoroClient:       pomodoropb.NewPomodoroServiceClient(pomodoroConn),
 	}
 
 	// Register HTTP handlers
 	uh := handler.NewUserHandler(gw.UserClient)
 	handler.RegisterUserRoutes(gw.Mux, uh)
 
-	// Build root handler and wrap with auth if configured
-	var root http.Handler = gw.Mux
-	if opt.OIDCClientID != "" {
-		authenticator, err := oidc.NewOIDCAuthenticator(ctx, opt.OIDCClientID)
-		if err != nil {
-			log.Printf("[ApiGateway] OIDC init failed: %v (auth disabled)", err)
-		} else {
-			root = authmw.AuthMiddleware(authenticator)(root)
-			log.Printf("[ApiGateway] OIDC auth enabled")
-		}
-	} else {
-		log.Printf("[ApiGateway] OIDC auth disabled (no client ID)")
-	}
+	tmh := handler.NewTaskManagementHandler(gw.TaskManagementClient)
+	handler.RegisterTaskManagementRoutes(gw.Mux, tmh)
+
+	ph := handler.NewPomodoroHandler(gw.PomodoroClient)
+	handler.RegisterPomodoroRoutes(gw.Mux, ph)
 
 	gw.Server = &http.Server{
 		Addr:         opt.HTTPAddr,

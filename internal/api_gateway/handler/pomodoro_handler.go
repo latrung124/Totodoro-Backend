@@ -46,7 +46,5 @@ func RegisterPomodoroRoutes(mux *http.ServeMux, h *PomodoroHandler) {
 		log.Printf("[gateway][pomodoro] failed to register grpc-gateway handlers: %v", err)
 	}
 
-	// Support both /v1/... (native) and /api/v1/... (prefixed) routes.
-	mux.Handle("/v1/", gwmux)
-	mux.Handle("/api/", http.StripPrefix("/api", gwmux))
+	mux.Handle("/v1/sessions", gwmux)
 }
