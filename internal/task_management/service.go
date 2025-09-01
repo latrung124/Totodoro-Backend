@@ -342,7 +342,7 @@ func (s *Service) CreateTaskGroup(ctx context.Context, req *pb.CreateTaskGroupRe
 		Priority:       req.Priority,
 		Status:         req.Status,
 		CompletedTasks: 0,
-		TotalTasks:     0,
+		TotalTasks:     req.TotalTasks,
 		CreatedAt:      timestamppb.New(now),
 		UpdatedAt:      timestamppb.New(now),
 	}

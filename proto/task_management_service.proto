@@ -85,6 +85,7 @@ message CreateTaskGroupRequest {
   google.protobuf.Timestamp deadline = 5;
   TaskGroupPriority priority = 6;
   TaskGroupStatus status = 7;
+  int32 total_tasks = 8;
 }
 
 message CreateTaskGroupResponse {

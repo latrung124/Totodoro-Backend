@@ -106,6 +106,7 @@ func TestCreateTaskGroup(t *testing.T) {
 	deadline := time.Now().Add(24 * time.Hour)
 	priority := pb.TaskGroupPriority_TASK_GROUP_PRIORITY_MEDIUM
 	status := pb.TaskGroupStatus_TASK_GROUP_STATUS_UNSPECIFIED
+	totalTasks := int32(10)
 
 	req := &pb.CreateTaskGroupRequest{
 		UserId:      userId,
@@ -115,6 +116,7 @@ func TestCreateTaskGroup(t *testing.T) {
 		Deadline:    timestamppb.New(deadline),
 		Priority:    priority,
 		Status:      status,
+		TotalTasks:  totalTasks,
 		// Icon, Deadline, Priority, Status left as zero-values
 	}
 
@@ -156,9 +158,12 @@ func TestCreateTaskGroup(t *testing.T) {
 		t.Errorf("Expected default status UNSPECIFIED, got %v", resp.Group.Status)
 	}
 
-	if resp.Group.CompletedTasks != 0 || resp.Group.TotalTasks != 0 {
-		t.Errorf("Expected completed_tasks=0 and total_tasks=0, got %d and %d",
-			resp.Group.CompletedTasks, resp.Group.TotalTasks)
+	if resp.Group.CompletedTasks != 0 {
+		t.Errorf("Expected completed_tasks=0, got %d", resp.Group.CompletedTasks)
+	}
+
+	if resp.Group.TotalTasks != totalTasks {
+		t.Errorf("Expected total_tasks=%d, got %d", totalTasks, resp.Group.TotalTasks)
 	}
 
 	if resp.Group.CreatedAt.AsTime().After(time.Now().Add(1*time.Second)) ||
@@ -198,8 +203,12 @@ func TestCreateTaskGroup(t *testing.T) {
 		t.Errorf("Persisted status expected %s, got %s", string(statusLabel), gotStatus)
 	}
 
-	if gotCompleted != 0 || gotTotal != 0 {
-		t.Errorf("Persisted completed/total expected 0/0, got %d/%d", gotCompleted, gotTotal)
+	if gotCompleted != 0 {
+		t.Errorf("Persisted completed_tasks expected 0, got %d", gotCompleted)
+	}
+
+	if gotTotal != totalTasks {
+		t.Errorf("Persisted total_tasks expected %d, got %d", totalTasks, gotTotal)
 	}
 
 	if resp.Group.Deadline == nil || !timesClose(resp.Group.Deadline.AsTime().UTC(), deadline.UTC(), time.Second) {
