@@ -11,8 +11,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
+	authmw "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/middleware"
+	oidcauth "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/oidc"
 	"github.com/latrung124/Totodoro-Backend/internal/api_gateway/handler"
 	pomodoropb "github.com/latrung124/Totodoro-Backend/internal/proto_package/pomodoro_service"
 	taskmanagementpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
@@ -106,6 +109,26 @@ func New(ctx context.Context, opt Options) (*Gateway, error) {
 
 	ph := handler.NewPomodoroHandler(gw.PomodoroClient)
 	handler.RegisterPomodoroRoutes(gw.Mux, ph)
+
+	gh := &handler.GoogleAuthHandler{
+		ClientID:     opt.OIDCClientID,
+		ClientSecret: os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET"),
+		Scopes:       []string{"openid", "email", "profile"},
+	}
+
+	gh.RegisterGoogleAuthRoutes(gw.Mux)
+
+	var root http.Handler = gw.Mux
+	if opt.OIDCClientID != "" {
+		if authenticator, err := oidcauth.NewOIDCAuthenticator(ctx, opt.OIDCClientID); err != nil {
+			log.Printf("[ApiGateway] OIDC init failed: %v (auth disabled)", err)
+		} else {
+			root = authmw.AuthMiddleware(authenticator)(root)
+			log.Printf("[ApiGateway] OIDC auth enabled")
+		}
+	} else {
+		log.Printf("[ApiGateway] OIDC auth disabled (no client ID)")
+	}
 
 	gw.Server = &http.Server{
 		Addr:         opt.HTTPAddr,
