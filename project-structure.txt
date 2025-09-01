@@ -2,19 +2,27 @@ project-root/
 ├── main.go                  # Entry point for the monolithic API
 ├── internal/
 │   ├── api_gateway/                            # User service logic
-│   │   ├── gateway.go                          # HTTP handlers (API endpoints)
+│   │   ├── api_gateway.go                      # API Gateway setup and routing 
+│   │   ├── authentication/
+│   │   │   ├── googleoauth/                    # Google OAuth 2.0 authentication 
+│   │   │   │   └── googleoauth.go
+│   │   │   ├── middleware/                     # Middleware for authentication 
+│   │   │   │   └── middleware.go
+│   │   │   └── oidc/                           # OpenID Connect (OIDC) authentication
+│   │   │       └── oidc.go
 │   │   └── handler/                            # HTTP handlers (API endpoints)
-│   │       ├── user_handler.go                 # HTTP handlers (API endpoints)
-│   │       ├── pomodoro_handler.go             # Business logic
-│   │       ├── task_management_handler.go      # Data access layer
-│   │       ├── statistic_handler.go            # Data access layer
-│   │       └── notification_handler.go         # Domain models (e.g., User struct)
-│   ├── user/                                   # User service logic
-│   │   ├── handler.go                          # HTTP handlers (API endpoints)
-│   │   ├── service.go                          # Business logic
-│   │   ├── repository.go                       # Data access layer
-│   │   └── model.go                            # Domain models (e.g., User struct)
-│   ├── pomodoro/                               # Pomodoro service logic
+│   │       ├── user_handler.go                 # User Service Endpoint handlers (API endpoints)
+│   │       ├── googleoauth_handler.go          # Google OAuth 2.0 handlers
+│   │       ├── pomodoro_handler.go             # Pomodoro Service Endpoint handlers
+│   │       ├── task_management_handler.go      # Task Management Service Endpoint handlers
+│   │       ├── statistic_handler.go            # Statistic Service Endpoint handlers
+│   │       └── notification_handler.go
+│   ├── user/                                   
+│   │   ├── handler.go
+│   │   ├── service.go
+│   │   ├── repository.go                       
+│   │   └── model.go
+│   ├── pomodoro/                               
 │   │   ├── handler.go
 │   │   ├── service.go
 │   │   ├── repository.go
