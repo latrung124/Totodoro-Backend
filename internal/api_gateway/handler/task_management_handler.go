@@ -46,6 +46,6 @@ func RegisterTaskManagementRoutes(mux *http.ServeMux, h *TaskManagementHandler) 
 		log.Printf("[gateway][task] failed to register grpc-gateway handlers: %v", err)
 	}
 
-	mux.Handle("/v1/tasks", gwmux)
-	mux.Handle("/v1/task-groups", gwmux)
+	mux.Handle("/v1/tasks/", gwmux)
+	mux.Handle("/v1/task-groups/", gwmux)
 }
