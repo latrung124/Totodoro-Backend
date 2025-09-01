@@ -13,6 +13,7 @@ import (
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	// authmw "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/middleware"
 	userpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/user_service"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -44,6 +45,7 @@ func RegisterUserRoutes(mux *http.ServeMux, h *UserHandler) {
 	// Create grpc-gateway mux and register generated routes using the existing UserServiceClient
 	gwmux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, jsonpb),
+		// runtime.WithIncomingHeaderMatcher(authmw.CustomHeaderMatcher), // Forward auth headers
 	)
 
 	if err := userpb.RegisterUserServiceHandlerClient(context.Background(), gwmux, h.client); err != nil {

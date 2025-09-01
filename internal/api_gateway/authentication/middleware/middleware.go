@@ -76,3 +76,13 @@ func EmailFromContext(ctx context.Context) (string, bool) {
 	email, ok := v.(string)
 	return email, ok
 }
+
+// CustomHeaderMatcher forwards specific headers from the incoming request to gRPC metadata.
+func CustomHeaderMatcher(key string) (string, bool) {
+	switch strings.ToLower(key) {
+	case "authorization", "x-user-id", "x-user-email":
+		return key, true
+	default:
+		return "", false
+	}
+}

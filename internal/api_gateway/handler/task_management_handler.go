@@ -13,6 +13,7 @@ import (
 	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	// authmw "github.com/latrung124/Totodoro-Backend/internal/api_gateway/authentication/middleware"
 	taskpb "github.com/latrung124/Totodoro-Backend/internal/proto_package/task_management_service"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -40,6 +41,7 @@ func RegisterTaskManagementRoutes(mux *http.ServeMux, h *TaskManagementHandler) 
 
 	gwmux := runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, jsonpb),
+		// runtime.WithIncomingHeaderMatcher(authmw.CustomHeaderMatcher), // Forward auth headers
 	)
 
 	if err := taskpb.RegisterTaskManagementServiceHandlerClient(context.Background(), gwmux, h.client); err != nil {
