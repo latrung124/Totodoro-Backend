@@ -47,5 +47,6 @@ func RegisterTaskManagementRoutes(mux *http.ServeMux, h *TaskManagementHandler) 
 	}
 
 	mux.Handle("/v1/tasks/", gwmux)
+	mux.Handle("/v1/task-groups", gwmux)
 	mux.Handle("/v1/task-groups/", gwmux)
 }
